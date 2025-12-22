@@ -1,0 +1,9 @@
+[package]
+name = "starkwaves-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+derive_more = { version = "2.1.0", default-features = false, features = ["display"] }
+starknet = "0.17.0"
+thiserror = "2.0.17"
