@@ -94,3 +94,219 @@ impl LargerBoardSize {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // BoardSize tests
+    #[test]
+    fn test_board_size_standard() {
+        let board = BoardSize::Standard;
+        assert_eq!(board.size(), 10);
+        assert_eq!(format!("{}", board), "10x10");
+    }
+
+    #[test]
+    fn test_board_size_smaller_6x6() {
+        let board = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+        assert_eq!(board.size(), 6);
+        assert_eq!(format!("{}", board), "6x6");
+    }
+
+    #[test]
+    fn test_board_size_smaller_8x8() {
+        let board = BoardSize::Smaller(SmallerBoardSize::EightByEight);
+        assert_eq!(board.size(), 8);
+        assert_eq!(format!("{}", board), "8x8");
+    }
+
+    #[test]
+    fn test_board_size_larger_12x12() {
+        let board = BoardSize::Larger(LargerBoardSize::TwelveByTwelve);
+        assert_eq!(board.size(), 12);
+        assert_eq!(format!("{}", board), "12x12");
+    }
+
+    #[test]
+    fn test_board_size_larger_14x14() {
+        let board = BoardSize::Larger(LargerBoardSize::FourteenByFourteen);
+        assert_eq!(board.size(), 14);
+        assert_eq!(format!("{}", board), "14x14");
+    }
+
+    #[test]
+    fn test_board_size_larger_20x20() {
+        let board = BoardSize::Larger(LargerBoardSize::TwentyByTwenty);
+        assert_eq!(board.size(), 20);
+        assert_eq!(format!("{}", board), "20x20");
+    }
+
+    #[test]
+    fn test_board_size_default() {
+        let board = BoardSize::default();
+        assert_eq!(board, BoardSize::Standard);
+        assert_eq!(board.size(), 10);
+    }
+
+    // Eligible ships tests
+    #[test]
+    fn test_standard_board_eligible_ships() {
+        let board = BoardSize::Standard;
+        let eligible = board.eligible_ship_kinds();
+
+        assert_eq!(eligible.len(), 5);
+        assert!(eligible.contains(&ShipKind::Carrier));
+        assert!(eligible.contains(&ShipKind::Battleship));
+        assert!(eligible.contains(&ShipKind::Cruiser));
+        assert!(eligible.contains(&ShipKind::Submarine));
+        assert!(eligible.contains(&ShipKind::Destroyer));
+        assert!(
+            !eligible.contains(&ShipKind::SuperCarrier),
+            "SuperCarrier should not be eligible on Standard board"
+        );
+    }
+
+    #[test]
+    fn test_smaller_board_eligible_ships() {
+        let board = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+        let eligible = board.eligible_ship_kinds();
+
+        assert_eq!(eligible.len(), 2);
+        assert!(eligible.contains(&ShipKind::Cruiser));
+        assert!(eligible.contains(&ShipKind::Destroyer));
+        assert!(!eligible.contains(&ShipKind::SuperCarrier));
+        assert!(!eligible.contains(&ShipKind::Carrier));
+        assert!(!eligible.contains(&ShipKind::Battleship));
+    }
+
+    #[test]
+    fn test_larger_board_eligible_ships() {
+        let board = BoardSize::Larger(LargerBoardSize::TwelveByTwelve);
+        let eligible = board.eligible_ship_kinds();
+
+        assert_eq!(eligible.len(), 6, "All ships should be eligible on larger boards");
+        assert!(eligible.contains(&ShipKind::SuperCarrier));
+        assert!(eligible.contains(&ShipKind::Carrier));
+        assert!(eligible.contains(&ShipKind::Battleship));
+        assert!(eligible.contains(&ShipKind::Cruiser));
+        assert!(eligible.contains(&ShipKind::Submarine));
+        assert!(eligible.contains(&ShipKind::Destroyer));
+    }
+
+    // Ship count tests
+    #[test]
+    fn test_standard_board_ship_counts() {
+        let board = BoardSize::Standard;
+
+        assert_eq!(board.ship_kinds_count(&ShipKind::Carrier), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Battleship), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Cruiser), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Submarine), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Destroyer), 1);
+        assert_eq!(
+            board.ship_kinds_count(&ShipKind::SuperCarrier), 0,
+            "SuperCarrier not allowed on Standard board"
+        );
+    }
+
+    #[test]
+    fn test_smaller_board_ship_counts() {
+        let board = BoardSize::Smaller(SmallerBoardSize::EightByEight);
+
+        assert_eq!(board.ship_kinds_count(&ShipKind::Cruiser), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Destroyer), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Carrier), 0);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Battleship), 0);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Submarine), 0);
+        assert_eq!(board.ship_kinds_count(&ShipKind::SuperCarrier), 0);
+    }
+
+    #[test]
+    fn test_larger_board_ship_counts() {
+        let board = BoardSize::Larger(LargerBoardSize::TwelveByTwelve);
+
+        // Destroyer and Submarine get 2 each on larger boards
+        assert_eq!(board.ship_kinds_count(&ShipKind::Destroyer), 2);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Submarine), 2);
+
+        // Others get 1 each
+        assert_eq!(board.ship_kinds_count(&ShipKind::SuperCarrier), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Carrier), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Battleship), 1);
+        assert_eq!(board.ship_kinds_count(&ShipKind::Cruiser), 1);
+    }
+
+    // SmallerBoardSize tests
+    #[test]
+    fn test_smaller_board_sizes() {
+        assert_eq!(SmallerBoardSize::SixBySix.size(), 6);
+        assert_eq!(SmallerBoardSize::EightByEight.size(), 8);
+    }
+
+    #[test]
+    fn test_smaller_board_display() {
+        assert_eq!(format!("{}", SmallerBoardSize::SixBySix), "6x6");
+        assert_eq!(format!("{}", SmallerBoardSize::EightByEight), "8x8");
+    }
+
+    #[test]
+    fn test_smaller_board_equality() {
+        assert_eq!(SmallerBoardSize::SixBySix, SmallerBoardSize::SixBySix);
+        assert_ne!(SmallerBoardSize::SixBySix, SmallerBoardSize::EightByEight);
+    }
+
+    // LargerBoardSize tests
+    #[test]
+    fn test_larger_board_sizes() {
+        assert_eq!(LargerBoardSize::TwelveByTwelve.size(), 12);
+        assert_eq!(LargerBoardSize::FourteenByFourteen.size(), 14);
+        assert_eq!(LargerBoardSize::TwentyByTwenty.size(), 20);
+    }
+
+    #[test]
+    fn test_larger_board_display() {
+        assert_eq!(format!("{}", LargerBoardSize::TwelveByTwelve), "12x12");
+        assert_eq!(format!("{}", LargerBoardSize::FourteenByFourteen), "14x14");
+        assert_eq!(format!("{}", LargerBoardSize::TwentyByTwenty), "20x20");
+    }
+
+    #[test]
+    fn test_larger_board_equality() {
+        assert_eq!(LargerBoardSize::TwelveByTwelve, LargerBoardSize::TwelveByTwelve);
+        assert_ne!(LargerBoardSize::TwelveByTwelve, LargerBoardSize::FourteenByFourteen);
+    }
+
+    // BoardSize equality and copy tests
+    #[test]
+    fn test_board_size_equality() {
+        assert_eq!(BoardSize::Standard, BoardSize::Standard);
+        assert_ne!(BoardSize::Standard, BoardSize::Smaller(SmallerBoardSize::SixBySix));
+
+        assert_eq!(
+            BoardSize::Smaller(SmallerBoardSize::SixBySix),
+            BoardSize::Smaller(SmallerBoardSize::SixBySix)
+        );
+
+        assert_eq!(
+            BoardSize::Larger(LargerBoardSize::TwelveByTwelve),
+            BoardSize::Larger(LargerBoardSize::TwelveByTwelve)
+        );
+    }
+
+    #[test]
+    fn test_board_size_copy() {
+        let board = BoardSize::Standard;
+        let copied = board;
+        assert_eq!(board, copied);
+        assert_eq!(board.size(), 10); // Original still usable
+    }
+
+    #[test]
+    fn test_board_size_clone() {
+        let board = BoardSize::Larger(LargerBoardSize::TwentyByTwenty);
+        let cloned = board.clone();
+        assert_eq!(board, cloned);
+        assert_eq!(cloned.size(), 20);
+    }
+}

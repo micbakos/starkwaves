@@ -1,12 +1,10 @@
 use super::orientation::Orientation;
-use super::ship::Ship;
 use super::result::Result;
+use super::ship::Ship;
+use crate::types::board_size::BoardSize;
+use crate::types::error::GameError::{InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
 use crate::types::{Cell, ShipKind};
 use std::fmt;
-use std::fmt::format;
-use crate::types::board_size::BoardSize;
-use crate::types::error::GameError;
-use crate::types::error::GameError::{InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
@@ -23,29 +21,6 @@ impl Board {
             size,
             cells: vec![Cell::Water; size.size() * size.size()],
             ships_placed: Vec::new(),
-        }
-    }
-
-    /// Gets the cell at the given coordinates
-    pub fn get(&self, x: usize, y: usize) -> Result<Cell> {
-        let size = self.size.size();
-        if (x >= size || y >= size) {
-            Err(GameError::OutOfBoardBounds { x, y })
-        } else {
-            let index = self.to_offset(x, y);
-            Ok(self.cells[index])
-        }
-    }
-
-    /// Sets the cell at the given coordinates
-    pub fn set(&mut self, x: usize, y: usize, cell: Cell) -> Result<()> {
-        let size = self.size.size();
-        if (x >= size || y >= size) {
-            Err(GameError::OutOfBoardBounds { x, y })
-        } else {
-            let index = self.to_offset(x, y);
-            self.cells[index] = cell;
-            Ok(())
         }
     }
 
@@ -70,12 +45,12 @@ impl Board {
         // Check if ship fits on board
         match ship.orientation {
             Orientation::Horizontal => {
-                if ship.x + length > board_size {
+                if ship.y + length > board_size {
                     return Err(InvalidShipPlacementBounds { ship: ship.kind, x: ship.x, y: ship.y, orientation: ship.orientation });
                 }
             }
             Orientation::Vertical => {
-                if ship.y + length > board_size {
+                if ship.x + length > board_size {
                     return Err(InvalidShipPlacementBounds { ship: ship.kind, x: ship.x, y: ship.y, orientation: ship.orientation });
                 }
             }
@@ -208,5 +183,231 @@ impl fmt::Display for Board {
         }
         writeln!(f, "{}", row(divider_items.as_slice(), None))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+    use crate::types::error::GameError;
+
+    #[test]
+    fn test_new_board_standard() {
+        let board = Board::new(BoardSize::Standard);
+        assert_eq!(board.size, BoardSize::Standard);
+        assert_eq!(board.cells.len(), 100); // 10x10
+        assert!(board.cells.iter().all(|c| c == &Cell::Water));
+        assert_eq!(board.ships_placed.len(), 0);
+    }
+
+    #[test]
+    fn test_new_board_smaller() {
+        let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        assert_eq!(board.cells.len(), 36); // 6x6
+        assert!(board.cells.iter().all(|c| c == &Cell::Water));
+    }
+
+    #[test]
+    fn test_new_board_larger() {
+        let board = Board::new(BoardSize::Larger(LargerBoardSize::TwelveByTwelve));
+        assert_eq!(board.cells.len(), 144); // 12x12
+        assert!(board.cells.iter().all(|c| c == &Cell::Water));
+    }
+
+    #[test]
+    fn test_default_board() {
+        let board = Board::default();
+        assert_eq!(board.size, BoardSize::Standard);
+        assert_eq!(board.cells.len(), 100);
+    }
+
+    #[test]
+    fn test_place_ship_horizontal() {
+        let mut board = Board::new(BoardSize::Standard);
+        let ship = Ship::new(ShipKind::Destroyer, 2, 3, Orientation::Horizontal);
+
+        assert!(board.place_ship(ship).is_ok());
+
+        // Verify ship is placed correctly (Destroyer has length 2)
+        assert_eq!(board.cells[board.to_offset(2, 3)], Cell::Ship(ShipKind::Destroyer));
+        assert_eq!(board.cells[board.to_offset(2, 4)], Cell::Ship(ShipKind::Destroyer));
+        assert_eq!(board.ships_placed.len(), 1);
+        assert_eq!(board.ships_placed[0], ShipKind::Destroyer);
+    }
+
+    #[test]
+    fn test_place_ship_vertical() {
+        let mut board = Board::new(BoardSize::Standard);
+        let ship = Ship::new(ShipKind::Cruiser, 1, 1, Orientation::Vertical);
+
+        assert!(board.place_ship(ship).is_ok());
+
+        // Verify ship is placed correctly (Cruiser has length 3)
+        assert_eq!(board.cells[board.to_offset(1, 1)], Cell::Ship(ShipKind::Cruiser));
+        assert_eq!(board.cells[board.to_offset(2, 1)], Cell::Ship(ShipKind::Cruiser));
+        assert_eq!(board.cells[board.to_offset(3, 1)], Cell::Ship(ShipKind::Cruiser));
+    }
+
+    #[test]
+    fn test_place_ship_out_of_bounds_horizontal() {
+        let mut board = Board::new(BoardSize::Standard); // 10x10
+        let ship = Ship::new(ShipKind::Carrier, 0, 9, Orientation::Horizontal); // Carrier length 5, y=9 + 5 > 10
+
+        let result = board.place_ship(ship);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementBounds { .. }));
+    }
+
+    #[test]
+    fn test_place_ship_out_of_bounds_vertical() {
+        let mut board = Board::new(BoardSize::Standard); // 10x10
+        let ship = Ship::new(ShipKind::Battleship, 8, 0, Orientation::Vertical); // Battleship length 4, x=8 + 4 > 10
+
+        let result = board.place_ship(ship);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementBounds { .. }));
+    }
+
+    #[test]
+    fn test_place_ship_collision_horizontal() {
+        let mut board = Board::new(BoardSize::Standard);
+
+        // Place first ship
+        let ship1 = Ship::new(ShipKind::Destroyer, 2, 2, Orientation::Horizontal);
+        assert!(board.place_ship(ship1).is_ok());
+
+        // Try to place second ship that overlaps
+        let ship2 = Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Horizontal);
+        let result = board.place_ship(ship2);
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementCollides { .. }));
+    }
+
+    #[test]
+    fn test_place_ship_collision_vertical() {
+        let mut board = Board::new(BoardSize::Standard);
+
+        // Place first ship
+        let ship1 = Ship::new(ShipKind::Cruiser, 3, 3, Orientation::Vertical);
+        assert!(board.place_ship(ship1).is_ok());
+
+        // Try to place second ship that overlaps
+        let ship2 = Ship::new(ShipKind::Destroyer, 4, 3, Orientation::Vertical);
+        let result = board.place_ship(ship2);
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementCollides { .. }));
+    }
+
+    #[test]
+    fn test_place_ship_too_many_of_same_kind() {
+        let mut board = Board::new(BoardSize::Standard);
+
+        // Place first Destroyer
+        let ship1 = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        assert!(board.place_ship(ship1).is_ok());
+
+        // Try to place second Destroyer (Standard board only allows 1)
+        let ship2 = Ship::new(ShipKind::Destroyer, 5, 5, Orientation::Horizontal);
+        let result = board.place_ship(ship2);
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementKind { .. }));
+    }
+
+    #[test]
+    fn test_place_multiple_ships_larger_board() {
+        let mut board = Board::new(BoardSize::Larger(LargerBoardSize::TwelveByTwelve));
+
+        // Larger boards allow 2 Destroyers
+        let ship1 = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let ship2 = Ship::new(ShipKind::Destroyer, 5, 5, Orientation::Horizontal);
+
+        assert!(board.place_ship(ship1).is_ok());
+        assert!(board.place_ship(ship2).is_ok());
+        assert_eq!(board.ships_placed.len(), 2);
+
+        // Third Destroyer should fail
+        let ship3 = Ship::new(ShipKind::Destroyer, 8, 8, Orientation::Horizontal);
+        let result = board.place_ship(ship3);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_to_array_empty_board() {
+        let board = Board::new(BoardSize::Standard);
+        let array = board.to_array();
+
+        assert_eq!(array.len(), 100);
+        assert!(array.iter().all(|&v| v == 0)); // All water cells
+    }
+
+    #[test]
+    fn test_to_array_with_ships() {
+        let mut board = Board::new(BoardSize::Standard);
+        let ship = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        board.place_ship(ship).unwrap();
+
+        let array = board.to_array();
+
+        assert_eq!(array[0], ShipKind::Destroyer.id());
+        assert_eq!(array[1], ShipKind::Destroyer.id());
+        assert!(array[2..].iter().all(|&v| v == 0));
+    }
+
+    #[test]
+    fn test_to_offset() {
+        let board = Board::new(BoardSize::Standard); // 10x10
+
+        assert_eq!(board.to_offset(0, 0), 0);
+        assert_eq!(board.to_offset(0, 1), 1);
+        assert_eq!(board.to_offset(0, 9), 9);
+        assert_eq!(board.to_offset(1, 0), 10);
+        assert_eq!(board.to_offset(1, 1), 11);
+        assert_eq!(board.to_offset(9, 9), 99);
+    }
+
+    #[test]
+    fn test_place_adjacent_ships_no_collision() {
+        let mut board = Board::new(BoardSize::Standard);
+
+        // Place ships adjacent but not overlapping
+        let ship1 = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal); // (0,0) to (0,1)
+        let ship2 = Ship::new(ShipKind::Destroyer, 1, 0, Orientation::Horizontal); // (1,0) to (1,1)
+
+        assert!(board.place_ship(ship1).is_ok());
+        // This should fail because we can only place 1 Destroyer on Standard board
+        assert!(board.place_ship(ship2).is_err());
+    }
+
+    #[test]
+    fn test_place_ships_at_board_edges() {
+        let mut board = Board::new(BoardSize::Standard); // 10x10
+
+        // Place ship at top-right corner
+        let ship1 = Ship::new(ShipKind::Destroyer, 0, 8, Orientation::Horizontal);
+        assert!(board.place_ship(ship1).is_ok());
+
+        // Place ship at bottom-left corner
+        let ship2 = Ship::new(ShipKind::Cruiser, 7, 0, Orientation::Vertical);
+        assert!(board.place_ship(ship2).is_ok());
+    }
+
+    #[test]
+    fn test_smaller_board_ship_limits() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+
+        // Only Destroyer and Cruiser allowed on smaller boards
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let cruiser = Ship::new(ShipKind::Cruiser, 2, 2, Orientation::Horizontal);
+
+        assert!(board.place_ship(destroyer).is_ok());
+        assert!(board.place_ship(cruiser).is_ok());
+
+        // Try to place another Destroyer (should fail - only 1 allowed)
+        let destroyer2 = Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal);
+        assert!(board.place_ship(destroyer2).is_err());
     }
 }

@@ -4,9 +4,6 @@ use crate::types::{Orientation, ShipKind};
 
 #[derive(Clone, Debug, Eq, ThisError, PartialEq)]
 pub enum GameError {
-    #[error("Position [{x}, {y}] is not on the board.")]
-    OutOfBoardBounds { x: usize, y: usize },
-
     #[error("A {ship} is not eligible for boards {size} size")]
     ShipIneligible { ship: ShipKind, size: BoardSize },
 
@@ -22,7 +19,7 @@ pub enum GameError {
         xc: usize,
         yc: usize,
     },
-    
+
     #[error("You cannot place any more {kind}s for this board size.")]
     InvalidShipPlacementKind { kind: ShipKind },
 }

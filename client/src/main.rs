@@ -1,5 +1,4 @@
 use crate::types::{Board, Orientation, Ship, ShipKind};
-use crate::types::board_size::{BoardSize, LargerBoardSize};
 
 mod types;
 

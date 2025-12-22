@@ -12,5 +12,4 @@ pub use cell::Cell;
 pub use ship::Ship;
 pub use ship_kind::ShipKind;
 pub use orientation::Orientation;
-pub use result::Result;
 
