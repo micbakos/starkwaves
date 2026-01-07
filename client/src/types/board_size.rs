@@ -1,6 +1,8 @@
 use std::collections::HashSet;
+use cairo_native::Value;
 use crate::types::ShipKind;
 use derive_more::Display;
+use crate::cairo::cairo_value::CairoValue;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum BoardSize {
@@ -16,7 +18,7 @@ pub enum BoardSize {
 }
 
 impl BoardSize {
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> u8 {
         match self {
             BoardSize::Standard => 10,
             BoardSize::Smaller(smaller) => smaller.size(),
@@ -58,6 +60,13 @@ impl Default for BoardSize {
     }
 }
 
+impl Into<CairoValue> for BoardSize {
+    fn into(self) -> CairoValue {
+        let size = self.size();
+        CairoValue(Value::Uint8(size))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum SmallerBoardSize {
     #[display("6x6")]
@@ -67,7 +76,7 @@ pub enum SmallerBoardSize {
 }
 
 impl SmallerBoardSize {
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> u8 {
         match self {
             SmallerBoardSize::SixBySix => 6,
             SmallerBoardSize::EightByEight => 8
@@ -86,7 +95,7 @@ pub enum LargerBoardSize {
 }
 
 impl LargerBoardSize {
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> u8 {
         match self {
             LargerBoardSize::TwelveByTwelve => 12,
             LargerBoardSize::FourteenByFourteen => 14,

@@ -1,5 +1,8 @@
-use std::collections::HashSet;
+use crate::cairo::cairo_value::CairoValue;
+use cairo_native::Value;
 use derive_more::Display;
+use std::collections::HashSet;
+use starknet::core::types::Felt;
 
 /// Represents different types of ships in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
@@ -14,13 +17,13 @@ pub enum ShipKind {
     Cruiser,      // Size 3
     #[display("Submarine")]
     Submarine,    // Size 3
-    #[display("Destoryer")]
+    #[display("Destroyer")]
     Destroyer,    // Size 2
 }
 
 impl ShipKind {
     /// Returns the length of the ship
-    pub fn length(&self) -> usize {
+    pub fn length(&self) -> u8 {
         match self {
             ShipKind::SuperCarrier => 6,
             ShipKind::Carrier => 5,
@@ -63,6 +66,21 @@ impl ShipKind {
             ShipKind::Submarine,
             ShipKind::Destroyer,
         ])
+    }
+}
+
+impl Into<CairoValue> for ShipKind {
+    fn into(self) -> CairoValue {
+        let variant_index = match self {
+            ShipKind::Carrier => 0,
+            ShipKind::Battleship => 1,
+            ShipKind::Cruiser => 2,
+            ShipKind::Submarine => 3,
+            ShipKind::Destroyer => 4,
+            ShipKind::SuperCarrier => 5,
+        };
+
+        CairoValue(Value::Felt252(Felt::from(variant_index)))
     }
 }
 

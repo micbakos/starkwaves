@@ -9,9 +9,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     size: BoardSize,
-    /// Cells stored in a single vector per rows
     cells: Vec<Cell>,
-
     ships_placed: Vec<ShipKind>,
 }
 
@@ -19,7 +17,7 @@ impl Board {
     pub fn new (size: BoardSize) -> Board {
         Board {
             size,
-            cells: vec![Cell::Water; size.size() * size.size()],
+            cells: vec![Cell::Water; (size.size() * size.size()) as usize],
             ships_placed: Vec::new(),
         }
     }
@@ -93,9 +91,10 @@ impl Board {
     /// Converts the board to a flat vec of u8 (for hashing)
     pub fn to_array(&self) -> Vec<u8> {
         let size = self.size.size();
-        let mut arr = Vec::with_capacity(size * size);
+        let total = (size * size) as usize;
+        let mut arr = Vec::with_capacity(total);
 
-        for i in 0..size * size {
+        for i in 0..total {
             arr.push(match self.cells[i] {
                 Cell::Water => 0,
                 Cell::Ship(kind) => kind.id()
@@ -105,10 +104,10 @@ impl Board {
         arr
     }
 
-    fn to_offset(&self, x: usize, y: usize) -> usize {
+    fn to_offset(&self, x: u8, y: u8) -> usize {
         let size = self.size.size();
         let rows_offset = x * size;
-        rows_offset + y
+        (rows_offset + y) as usize
     }
 }
 
@@ -120,7 +119,7 @@ impl Default for Board {
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let size = self.size.size();
+        let size = self.size.size() as usize;
         let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
         let row = | items: &[&str], index: Option<usize> | -> String {
             let sanitize = | text: &str | {
@@ -190,7 +189,6 @@ impl fmt::Display for Board {
 mod tests {
     use super::*;
     use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
-    use crate::types::error::GameError;
 
     #[test]
     fn test_new_board_standard() {
@@ -256,7 +254,7 @@ mod tests {
 
         let result = board.place_ship(ship);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementBounds { .. }));
+        assert!(matches!(result.unwrap_err(), InvalidShipPlacementBounds { .. }));
     }
 
     #[test]
@@ -266,7 +264,7 @@ mod tests {
 
         let result = board.place_ship(ship);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementBounds { .. }));
+        assert!(matches!(result.unwrap_err(), InvalidShipPlacementBounds { .. }));
     }
 
     #[test]
@@ -282,7 +280,7 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementCollides { .. }));
+        assert!(matches!(result.unwrap_err(), InvalidShipPlacementCollides { .. }));
     }
 
     #[test]
@@ -298,7 +296,7 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementCollides { .. }));
+        assert!(matches!(result.unwrap_err(), InvalidShipPlacementCollides { .. }));
     }
 
     #[test]
@@ -314,7 +312,7 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GameError::InvalidShipPlacementKind { .. }));
+        assert!(matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }));
     }
 
     #[test]
