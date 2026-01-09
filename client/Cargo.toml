@@ -7,12 +7,19 @@ edition = "2021"
 derive_more = { version = "2.1.0", default-features = false, features = ["display"] }
 thiserror = "2.0.17"
 rand = "0.8.5"
+serde_json = "1.0"
+serde = { version = "1.0.228", features = ["derive"] }
 starknet = "0.17.0"
-cairo-native = "0.8.0"
-cairo-lang-sierra = "2.14.0"
-serde_json = "1.0"
+rs_merkle = "1.5.0"
 
-[build-dependencies]
+[dev-dependencies]
 cairo-native = "0.8.0"
 cairo-lang-sierra = "2.14.0"
-serde_json = "1.0"
+
+[features]
+cairo-build = []
+
+[[test]]
+name = "cairo_compatibility"
+path = "tests/rs_cairo_commitment.rs"
+required-features = ["cairo-build"]

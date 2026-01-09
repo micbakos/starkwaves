@@ -1,7 +1,6 @@
-use thiserror::Error as ThisError;
-use crate::cairo::panic_result::CairoError;
 use crate::types::board_size::BoardSize;
 use crate::types::{Orientation, ShipKind};
+use thiserror::Error as ThisError;
 
 #[derive(Clone, Debug, Eq, ThisError, PartialEq)]
 pub enum GameError {
@@ -23,9 +22,4 @@ pub enum GameError {
 
     #[error("You cannot place any more {kind}s for this board size.")]
     InvalidShipPlacementKind { kind: ShipKind },
-
-    #[error("{}", cairo_error)]
-    ProverError {
-        cairo_error: CairoError
-    }
 }

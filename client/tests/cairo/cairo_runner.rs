@@ -1,3 +1,4 @@
+use std::path::Path;
 use crate::cairo::panic_result::{CairoError, CairoResult};
 use cairo_lang_sierra::program::Program;
 use cairo_native::context::NativeContext;
@@ -13,11 +14,8 @@ pub struct CairoRunner {
 
 impl CairoRunner {
     /// Create a new prover by loading and compiling the Sierra program
-    pub fn new() -> Self {
-        let sierra_path = env!("VALIDATOR_SIERRA_PATH");
-        println!("Loading Sierra program from {}...", sierra_path);
-
-        let sierra_json = std::fs::read_to_string(sierra_path)
+    pub fn new(program_path: &Path) -> Self {
+        let sierra_json = std::fs::read_to_string(program_path)
             .expect("Unable to read sierra program file");
 
         let program = serde_json::from_str::<Program>(&sierra_json)

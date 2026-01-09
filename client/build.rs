@@ -3,20 +3,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    // Rerun if Cairo source changes
-    // println!("cargo:rerun-if-changed=../validator/src/lib.cairo");
-    // println!("cargo:rerun-if-changed=../validator/src/types.cairo");
-    // println!("cargo:rerun-if-changed=../validator/Scarb.toml");
+    println!("cargo:rerun-if-changed=../validator/target/dev");
+    println!("cargo:rerun-if-changed=../validator/target/release");
+    println!("cargo:rerun-if-changed=../validator/src");
+    println!("cargo:rerun-if-changed=../validator/Scarb.toml");
 
-
-    println!("cargo:warning=Building cairo");
-    let sierra_file = build_validator();
-
-    // Tell Cargo where the files are for runtime loading
+    let sierra_file = build_validator(false);
     println!("cargo:rustc-env=VALIDATOR_SIERRA_PATH={}", sierra_file.display());
 }
 
-fn build_validator() -> PathBuf {
+fn build_validator(release: bool) -> PathBuf {
     let validator_dir = Path::new("../validator");
 
     // Check if scarb is available
@@ -31,10 +27,16 @@ fn build_validator() -> PathBuf {
         panic!("Failed to compile Cairo compilation");
     }
 
+    let mut scarb_args: Vec<&str> = vec![];
+    if release {
+        scarb_args.push("--release");
+    }
+    scarb_args.push("build");
+
     // Run scarb
     let output = Command::new("scarb")
         .current_dir(validator_dir)
-        .arg("build")
+        .args(scarb_args)
         .output()
         .expect("Failed to execute scarb build");
 
@@ -43,25 +45,15 @@ fn build_validator() -> PathBuf {
         panic!("Cairo compilation failed:\n{}", stderr);
     }
 
+    let target_dir = if release {
+        validator_dir.join("target/release")
+    } else {
+        validator_dir.join("target/dev")
+    };
+
     // Find sierra program file
-    let target_dir = validator_dir.join("target/dev");
     find_sierra_file(&target_dir)
         .expect("Could not find Sierra output file. Check Scarb build output.")
-
-    // Copy Sierra file to a known location for embedding
-    // // Step 5: Extract Sierra program from Contract Class JSON
-    // println!("Extracting Sierra program from contract class...");
-    //
-    // let contract_class_json = fs::read_to_string(&dest_path)
-    //     .expect("Failed to read contract class JSON");
-    //
-    // // Parse the contract class using cairo-lang-starknet-classes
-    // let contract_class: ContractClass = serde_json::from_str(&contract_class_json)
-    //     .expect("Failed to parse contract class JSON");
-    //
-    // // Extract the Sierra program from the contract class
-    // let sierra_program = contract_class.extract_sierra_program()
-    //     .expect("Failed to extract Sierra program from contract class");
 }
 
 fn find_sierra_file(dir: &Path) -> Option<PathBuf> {

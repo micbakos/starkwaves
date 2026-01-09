@@ -3,7 +3,6 @@ mod tests;
 pub mod types;
 use core::array::ArrayTrait;
 use core::dict::Felt252Dict;
-use core::poseidon::poseidon_hash_span;
 use types::{Orientation, Ship, ShipKindTrait};
 
 pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) -> felt252 {
@@ -15,7 +14,58 @@ pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) ->
 
     let board = assert_no_collisions_in_board(ships_span, board_size);
 
-    return create_commitment(board, salt);
+    return compute_merkle_root(board, salt);
+}
+
+pub fn compute_merkle_root(board: Array<u8>, salt: felt252) -> felt252 {
+    let mut leaves: Array<felt252> = array![];
+    let board_span = board.span();
+    let mut i = 0;
+    while i < board_span.len() {
+        let cell: felt252 = (*board_span.at(i)).into();
+        let hash = core::pedersen::pedersen(cell, salt);
+        leaves.append(hash);
+        i += 1;
+    }
+
+    build_merkle_tree(leaves.span())
+}
+
+/// Recursively builds a Merkle tree from leaves using Pedersen hash
+/// Pairs up leaves and hashes them together until one root remains
+fn build_merkle_tree(leaves: Span<felt252>) -> felt252 {
+    let len = leaves.len();
+
+    // Base cases
+    if len == 0 {
+        return 0;
+    }
+
+    if len == 1 {
+        return *leaves.at(0);
+    }
+
+    // Build next level by pairing and hashing
+    let mut parent_level: Array<felt252> = array![];
+    let mut i = 0;
+
+    while i < len {
+        if i + 1 < len {
+            // Hash pair using Pedersen
+            let left = *leaves.at(i);
+            let right = *leaves.at(i + 1);
+            let hash = core::pedersen::pedersen(left, right);
+            parent_level.append(hash);
+            i += 2;
+        } else {
+            // Odd node: carry forward unchanged (matches rs_merkle behavior)
+            parent_level.append(*leaves.at(i));
+            i += 1;
+        }
+    }
+
+    // Recurse on parent level
+    build_merkle_tree(parent_level.span())
 }
 
 fn assert_board_size(board_size: u8) {
@@ -94,7 +144,7 @@ fn assert_ships_fit_in_board(ships: Span<Ship>, board_size: u8) {
     }
 }
 
-fn assert_no_collisions_in_board(ships: Span<Ship>, board_size: u8) -> Span<u8> {
+fn assert_no_collisions_in_board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
     let mut board: Felt252Dict<u8> = Default::default();
 
     let offset = |x: u8, y: u8| -> felt252 {
@@ -127,57 +177,5 @@ fn assert_no_collisions_in_board(ships: Span<Ship>, board_size: u8) -> Span<u8> 
         board_array.append(board.get(i.into()));
     }
 
-    return board_array.span();
-}
-
-/// Computes a merkle root from a span of leaves using Poseidon hash
-/// Each pair of leaves is hashed together, then the process repeats until one root remains
-fn compute_merkle_root(mut leaves: Span<felt252>) -> felt252 {
-    let len = leaves.len();
-
-    if len == 0 {
-        return 0;
-    }
-
-    if len == 1 {
-        return *leaves.at(0);
-    }
-
-    let mut parent_tree_level: Array<felt252> = array![];
-    let mut i = 0;
-
-    while i < len {
-        if i + 1 < len {
-            let left = *leaves.at(i);
-            let right = *leaves.at(i + 1);
-            let pair = array![left, right];
-            let hash = poseidon_hash_span(pair.span());
-            parent_tree_level.append(hash);
-            i += 2;
-        } else {
-            parent_tree_level.append(*leaves.at(i));
-            i += 1;
-        }
-    }
-
-    compute_merkle_root(parent_tree_level.span())
-}
-
-/// Creates a commitment by computing merkle root of board cells with salt
-/// The salt is included as the last leaf to make the commitment binding and hiding
-fn create_commitment(board: Span<u8>, salt: felt252) -> felt252 {
-    let mut leaves: Array<felt252> = array![];
-
-    // Convert board cells to felt252 and add as leaves
-    let mut i = 0;
-    while i < board.len() {
-        leaves.append((*board.at(i)).into());
-        i += 1;
-    }
-
-    // Add salt as final leaf
-    leaves.append(salt);
-
-    // Compute and return merkle root
-    compute_merkle_root(leaves.span())
+    return board_array;
 }
