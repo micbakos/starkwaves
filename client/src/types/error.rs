@@ -22,4 +22,7 @@ pub enum GameError {
 
     #[error("You cannot place any more {kind}s for this board size.")]
     InvalidShipPlacementKind { kind: ShipKind },
+
+    #[error("All ships are not placed in board")]
+    BoardNotReady,
 }

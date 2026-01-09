@@ -1,6 +1,7 @@
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use crate::types::board_size::BoardSize;
 
 /// Represents different types of ships in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
@@ -64,6 +65,31 @@ impl ShipKind {
             ShipKind::Submarine,
             ShipKind::Destroyer,
         ])
+    }
+
+    pub fn is_eligible(self: ShipKind, board_size: BoardSize, occurrences: u8) -> bool {
+        let size = board_size.size();
+        if size == 6 || size == 8 {
+            if self == ShipKind::Cruiser || self == ShipKind::Destroyer {
+                occurrences == 1
+            } else {
+                occurrences == 0
+            }
+        } else if size == 10 {
+            if self != ShipKind::SuperCarrier {
+                occurrences == 1
+            } else {
+                occurrences == 0
+            }
+        } else if size == 12 || size == 14 || size == 20 {
+            if self == ShipKind::Destroyer || self == ShipKind::Submarine {
+                occurrences == 2
+            } else {
+                occurrences == 1
+            }
+        } else {
+            false
+        }
     }
 }
 

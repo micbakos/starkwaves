@@ -17,12 +17,12 @@ fn main() {
     let mut rng = rand::thread_rng();
     let salt: u64 = rng.gen();
 
-    let board_array = board.to_array();
+    let board_array = board.to_array().expect("Board should be ready");
     println!("{}", board);
     println!("\nBoard as Vec<u8> (length: {}):", board_array.len());
     println!("{:?}", board_array);
 
-    let commitment = board.commitment(salt);
+    let commitment = board.commitment(salt).expect("Board should be ready");
     println!("\n✓ Commitment generated (Rust Poseidon)");
     println!("Commitment: 0x{:064x}", commitment);
     println!("Salt: {}", salt);

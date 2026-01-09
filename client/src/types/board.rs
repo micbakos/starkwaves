@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use super::orientation::Orientation;
 use super::result::Result;
 use super::ship::Ship;
 use crate::types::board_size::BoardSize;
-use crate::types::error::GameError::{InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
+use crate::types::error::GameError::{BoardNotReady, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
 use crate::types::{Cell, ShipKind};
 use std::fmt;
 use starknet::core::types::Felt;
@@ -91,7 +92,11 @@ impl Board {
     }
 
     /// Converts the board to a flat vec of u8 (for hashing)
-    pub fn to_array(&self) -> Vec<u8> {
+    pub fn to_array(&self) -> Result<Vec<u8>> {
+        if !self.is_board_ready() {
+            Err(BoardNotReady)?;
+        }
+
         let size = self.size.size();
         let total = (size * size) as usize;
         let mut arr = Vec::with_capacity(total);
@@ -103,20 +108,36 @@ impl Board {
             })
         }
 
-        arr
+        Ok(arr)
     }
 
     /// Generates a merkle tree that proves the state of the board on each cell in
     /// combination with the given salt.
-    pub fn commitment(&self, salt: u64) -> Felt {
-        let tree = BoardMerkleTree::build(self, salt);
-        tree.root()
+    pub fn commitment(&self, salt: u64) -> Result<Felt> {
+        let array = self.to_array()?;
+
+        let tree = BoardMerkleTree::build(array, salt);
+        Ok(tree.root())
     }
 
     fn to_offset(&self, x: u8, y: u8) -> usize {
         let size = self.size.size();
         let rows_offset = x * size;
         (rows_offset + y) as usize
+    }
+
+    fn is_board_ready(&self) -> bool {
+        let mut kinds_placed = HashMap::<ShipKind, u8>::new();
+
+        self.ships_placed.iter().for_each(|kind| {
+            let occurrences = kinds_placed.get(kind).unwrap_or(&0);
+            kinds_placed.insert(*kind, occurrences + 1);
+        });
+
+        ShipKind::all().iter().all(|kind| {
+            let occurrences = kinds_placed.get(&kind).unwrap_or(&0u8);
+            kind.is_eligible(self.size, *occurrences)
+        })
     }
 }
 
@@ -343,25 +364,31 @@ mod tests {
     }
 
     #[test]
-    fn test_to_array_empty_board() {
+    fn test_to_array_empty_board_fails() {
         let board = Board::new(BoardSize::Standard);
-        let array = board.to_array();
+        let result = board.to_array();
 
-        assert_eq!(array.len(), 100);
-        assert!(array.iter().all(|&v| v == 0)); // All water cells
+        assert!(result.is_err(), "Empty board should not be ready");
     }
 
     #[test]
     fn test_to_array_with_ships() {
         let mut board = Board::new(BoardSize::Standard);
-        let ship = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
-        board.place_ship(ship).unwrap();
+        // Complete 10x10 board: needs Carrier, Battleship, Cruiser, Submarine, Destroyer (1 each)
+        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal)).unwrap();
+        board.place_ship(Ship::new(ShipKind::Carrier, 2, 0, Orientation::Horizontal)).unwrap();
+        board.place_ship(Ship::new(ShipKind::Battleship, 4, 0, Orientation::Horizontal)).unwrap();
+        board.place_ship(Ship::new(ShipKind::Cruiser, 6, 0, Orientation::Horizontal)).unwrap();
+        board.place_ship(Ship::new(ShipKind::Submarine, 8, 0, Orientation::Horizontal)).unwrap();
 
-        let array = board.to_array();
+        let array = board.to_array().expect("Board should be ready");
 
+        // Verify Destroyer at position 0, 1
         assert_eq!(array[0], ShipKind::Destroyer.id());
         assert_eq!(array[1], ShipKind::Destroyer.id());
-        assert!(array[2..].iter().all(|&v| v == 0));
+
+        // Verify array has correct size
+        assert_eq!(array.len(), 100); // 10x10
     }
 
     #[test]
@@ -423,66 +450,86 @@ mod tests {
     #[test]
     fn test_board_commitment_deterministic() {
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
         board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
 
-        let commitment1 = board.commitment(salt);
-        let commitment2 = board.commitment(salt);
+        let commitment1 = board.commitment(salt).expect("Board should be ready");
+        let commitment2 = board.commitment(salt).expect("Board should be ready");
 
         assert_eq!(commitment1, commitment2, "Same board and salt should produce same commitment");
     }
 
     #[test]
-    fn test_board_commitment_empty_board() {
+    fn test_board_commitment_empty_board_fails() {
         let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         let salt = 99999u64;
 
-        let commitment = board.commitment(salt);
+        let result = board.commitment(salt);
 
-        assert_ne!(commitment, Felt::ZERO, "Empty board should still produce non-zero commitment");
+        assert!(result.is_err(), "Empty board should not be ready for commitment");
     }
 
     #[test]
     fn test_board_commitment_different_salt() {
-        let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
+        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
 
-        let commitment1 = board.commitment(11111);
-        let commitment2 = board.commitment(22222);
+        let commitment1 = board.commitment(11111).expect("Board should be ready");
+        let commitment2 = board.commitment(22222).expect("Board should be ready");
 
         assert_ne!(commitment1, commitment2, "Different salts should produce different commitments");
     }
 
     #[test]
     fn test_board_commitment_different_ships() {
+        // Board 1: Complete board with Destroyer and Cruiser at one position
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
+        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
 
+        // Board 2: Complete board with Destroyer and Cruiser at different positions
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
 
-        assert_ne!(board1.commitment(salt), board2.commitment(salt),
-            "Different ships should produce different commitments");
+        assert_ne!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
+            "Different ship arrangements should produce different commitments");
     }
 
     #[test]
     fn test_board_commitment_different_positions() {
         let salt = 12345u64;
 
+        // Board 1: Complete board with ships at position 1
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
+        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
 
+        // Board 2: Complete board with ships at position 2
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 3, Orientation::Horizontal))
             .expect("Ship placement should succeed");
+        board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
+            .expect("Ship placement should succeed");
 
-        assert_ne!(board1.commitment(salt), board2.commitment(salt),
+        assert_ne!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
             "Same ship at different positions should produce different commitments");
     }
 
@@ -496,12 +543,12 @@ mod tests {
         board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Cruiser placement should succeed");
 
-        let commitment = board.commitment(salt);
+        let commitment = board.commitment(salt).expect("Board should be ready");
 
         assert_ne!(commitment, Felt::ZERO, "Board with multiple ships should produce non-zero commitment");
 
         // Verify it's still deterministic
-        assert_eq!(commitment, board.commitment(salt), "Commitment should be deterministic");
+        assert_eq!(commitment, board.commitment(salt).unwrap(), "Commitment should be deterministic");
     }
 
     #[test]
@@ -523,18 +570,27 @@ mod tests {
             .expect("Ship placement should succeed");
 
         // Commitments should be the same (only final board state matters, not placement order)
-        assert_eq!(board1.commitment(salt), board2.commitment(salt),
+        assert_eq!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
             "Placement order should not affect commitment (only final board state matters)");
     }
 
     #[test]
     fn test_board_commitment_standard_size() {
         let mut board = Board::new(BoardSize::Standard);
+        // Complete 10x10 board: needs Carrier, Battleship, Cruiser, Submarine, Destroyer (1 each)
         board.place_ship(Ship::new(ShipKind::Carrier, 0, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Battleship, 2, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Cruiser, 4, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Submarine, 6, 0, Orientation::Horizontal))
+            .expect("Ship placement should succeed");
+        board.place_ship(Ship::new(ShipKind::Destroyer, 8, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
-        let commitment = board.commitment(salt);
+        let commitment = board.commitment(salt).expect("Board should be ready");
 
         assert_ne!(commitment, Felt::ZERO, "Standard board should produce non-zero commitment");
     }
