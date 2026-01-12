@@ -2,12 +2,6 @@
 version = 1
 
 [[package]]
-name = "openzeppelin_merkle_tree"
-version = "3.0.0"
-source = "registry+https://scarbs.xyz/"
-checksum = "sha256:3417680a1f672bd6cfb54962481f6b96d72f6510be2658d17c8356709b5c950a"
-
-[[package]]
 name = "snforge_scarb_plugin"
 version = "0.53.0"
 source = "registry+https://scarbs.xyz/"
@@ -26,6 +20,5 @@ dependencies = [
 name = "starkwaves_validator"
 version = "0.1.0"
 dependencies = [
- "openzeppelin_merkle_tree",
  "snforge_std",
 ]

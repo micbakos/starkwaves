@@ -5,7 +5,6 @@ pub mod types;
 use core::array::ArrayTrait;
 use core::dict::Felt252Dict;
 use merkle::compute_merkle_root;
-use openzeppelin_merkle_tree::merkle_proof::verify_pedersen;
 use types::{Orientation, Ship, ShipKindTrait, board};
 
 pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) -> felt252 {
