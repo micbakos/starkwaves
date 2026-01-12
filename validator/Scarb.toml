@@ -7,6 +7,7 @@ edition = "2024_07"
 
 [dependencies]
 starknet = "2.14.0"
+openzeppelin_merkle_tree = "3.0.0"
 
 [dev-dependencies]
 snforge_std = "0.53.0"

@@ -1,6 +1,5 @@
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
 use starkwaves_client::types::{Board, Orientation, Ship, ShipKind};
-use rand::Rng;
 
 fn main() {
     let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
@@ -14,16 +13,10 @@ fn main() {
             .expect("Ship placement failed");
     }
 
-    let mut rng = rand::thread_rng();
-    let salt: u64 = rng.gen();
+    let salt = 1234;
 
-    let board_array = board.to_array().expect("Board should be ready");
+    let commitment = board.commit(salt).expect("Board should be ready");
     println!("{}", board);
-    println!("\nBoard as Vec<u8> (length: {}):", board_array.len());
-    println!("{:?}", board_array);
-
-    let commitment = board.commitment(salt).expect("Board should be ready");
-    println!("\n✓ Commitment generated (Rust Poseidon)");
-    println!("Commitment: 0x{:064x}", commitment);
     println!("Salt: {}", salt);
+    println!("Commitment: 0x{:064x}", commitment);
 }

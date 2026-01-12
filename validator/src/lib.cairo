@@ -1,9 +1,12 @@
+pub mod merkle;
 #[cfg(test)]
 mod tests;
 pub mod types;
 use core::array::ArrayTrait;
 use core::dict::Felt252Dict;
-use types::{Orientation, Ship, ShipKindTrait};
+use merkle::compute_merkle_root;
+use openzeppelin_merkle_tree::merkle_proof::verify_pedersen;
+use types::{Orientation, Ship, ShipKindTrait, board};
 
 pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) -> felt252 {
     let ships_span = ships.span();
@@ -12,60 +15,13 @@ pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) ->
     assert_eligible_ships(ships_span, board_size);
     assert_ships_fit_in_board(ships_span, board_size);
 
-    let board = assert_no_collisions_in_board(ships_span, board_size);
+    let board = board(ships_span, board_size);
 
     return compute_merkle_root(board, salt);
 }
 
-pub fn compute_merkle_root(board: Array<u8>, salt: felt252) -> felt252 {
-    let mut leaves: Array<felt252> = array![];
-    let board_span = board.span();
-    let mut i = 0;
-    while i < board_span.len() {
-        let cell: felt252 = (*board_span.at(i)).into();
-        let hash = core::pedersen::pedersen(cell, salt);
-        leaves.append(hash);
-        i += 1;
-    }
-
-    build_merkle_tree(leaves.span())
-}
-
-/// Recursively builds a Merkle tree from leaves using Pedersen hash
-/// Pairs up leaves and hashes them together until one root remains
-fn build_merkle_tree(leaves: Span<felt252>) -> felt252 {
-    let len = leaves.len();
-
-    // Base cases
-    if len == 0 {
-        return 0;
-    }
-
-    if len == 1 {
-        return *leaves.at(0);
-    }
-
-    // Build next level by pairing and hashing
-    let mut parent_level: Array<felt252> = array![];
-    let mut i = 0;
-
-    while i < len {
-        if i + 1 < len {
-            // Hash pair using Pedersen
-            let left = *leaves.at(i);
-            let right = *leaves.at(i + 1);
-            let hash = core::pedersen::pedersen(left, right);
-            parent_level.append(hash);
-            i += 2;
-        } else {
-            // Odd node: carry forward unchanged (matches rs_merkle behavior)
-            parent_level.append(*leaves.at(i));
-            i += 1;
-        }
-    }
-
-    // Recurse on parent level
-    build_merkle_tree(parent_level.span())
+pub fn verify_report(salted_status: felt252, proof: Array<felt252>, root: felt252) -> bool {
+    verify_pedersen(proof.span(), root, salted_status)
 }
 
 fn assert_board_size(board_size: u8) {
@@ -142,40 +98,4 @@ fn assert_ships_fit_in_board(ships: Span<Ship>, board_size: u8) {
             },
         }
     }
-}
-
-fn assert_no_collisions_in_board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
-    let mut board: Felt252Dict<u8> = Default::default();
-
-    let offset = |x: u8, y: u8| -> felt252 {
-        let rows_offset: u32 = x.into() * board_size.into();
-        (rows_offset + y.into()).into()
-    };
-
-    for ship in ships {
-        let id = ship.kind.id();
-        let size = ship.kind.length();
-
-        for step in 0..size {
-            let (x, y) = match ship.orientation {
-                Orientation::Horizontal => (*ship.x, *ship.y + step),
-                Orientation::Vertical => (*ship.x + step, *ship.y),
-            };
-
-            let offset = offset(x, y);
-            let item = board.get(offset);
-
-            assert!(item == 0, "Ship {} collides with {} in [{},{}]", id, item, x, y)
-
-            board.insert(offset, id);
-        }
-    }
-
-    let mut board_array: Array<u8> = ArrayTrait::new();
-    let array_size: u32 = board_size.into() * board_size.into();
-    for i in 0..array_size {
-        board_array.append(board.get(i.into()));
-    }
-
-    return board_array;
 }

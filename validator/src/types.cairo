@@ -1,4 +1,5 @@
 use core::fmt::Display;
+use crate::Felt252Dict;
 
 #[derive(Debug, Drop, Serde, Copy)]
 pub struct Ship {
@@ -93,4 +94,46 @@ pub impl ShipKindImpl of ShipKindTrait {
             ShipKind::Destroyer, ShipKind::SuperCarrier,
         ]
     }
+}
+
+#[derive(Debug, Drop, Serde, Copy)]
+pub enum FireStatus {
+    Miss,
+    Hit: ShipKind,
+}
+
+pub fn board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
+    let mut board: Felt252Dict<u8> = Default::default();
+
+    let offset = |x: u8, y: u8| -> felt252 {
+        let rows_offset: u32 = x.into() * board_size.into();
+        (rows_offset + y.into()).into()
+    };
+
+    for ship in ships {
+        let id = ship.kind.id();
+        let size = ship.kind.length();
+
+        for step in 0..size {
+            let (x, y) = match ship.orientation {
+                Orientation::Horizontal => (*ship.x, *ship.y + step),
+                Orientation::Vertical => (*ship.x + step, *ship.y),
+            };
+
+            let offset = offset(x, y);
+            let item = board.get(offset);
+
+            assert!(item == 0, "Ship {} collides with {} in [{},{}]", id, item, x, y)
+
+            board.insert(offset, id);
+        }
+    }
+
+    let mut board_array: Array<u8> = ArrayTrait::new();
+    let array_size: u32 = board_size.into() * board_size.into();
+    for i in 0..array_size {
+        board_array.append(board.get(i.into()));
+    }
+
+    return board_array;
 }

@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(format!("{}", ShipKind::Battleship), "Battleship");
         assert_eq!(format!("{}", ShipKind::Cruiser), "Cruiser");
         assert_eq!(format!("{}", ShipKind::Submarine), "Submarine");
-        assert_eq!(format!("{}", ShipKind::Destroyer), "Destoryer"); // Note: typo in original
+        assert_eq!(format!("{}", ShipKind::Destroyer), "Destroyer"); // Note: typo in original
     }
 
     #[test]

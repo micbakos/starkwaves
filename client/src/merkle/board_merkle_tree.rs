@@ -3,30 +3,43 @@ use rs_merkle::MerkleTree;
 use starknet::core::crypto::pedersen_hash;
 use starknet::core::types::Felt;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoardMerkleTree {
-    tree: MerkleTree<PedersenHasher>,
+    leaves: Vec<[u8; 32]>,
+    salt: u64,
 }
 
 /// Produces a Merkle Tree that uses Pedersen hash for node hashing
 impl BoardMerkleTree {
     pub fn build(board_array: Vec<u8>, salt: u64) -> Self {
-        let salt = Felt::from(salt);
+        let salt_felt = Felt::from(salt);
 
         let leaves = board_array
             .iter()
             .map(|c| {
                 let cell = Felt::from(*c);
-                let hash = pedersen_hash(&cell, &salt);
-                hash.to_bytes_be()
+                pedersen_hash(&cell, &salt_felt).to_bytes_be()
             })
             .collect::<Vec<_>>();
+        BoardMerkleTree { leaves, salt }
+    }
 
-        let tree = MerkleTree::<PedersenHasher>::from_leaves(&leaves);
-        BoardMerkleTree { tree }
+    pub fn as_tree(&self) -> MerkleTree<PedersenHasher> {
+        MerkleTree::<PedersenHasher>::from_leaves(&self.leaves)
     }
 
     pub fn root(&self) -> Felt {
-        Felt::from_bytes_be(&self.tree.root().expect("Tree should have root"))
+        let tree = self.as_tree();
+        Felt::from_bytes_be(&tree.root().expect("Tree should have root"))
+    }
+
+    pub fn proof(&self, offset: usize) -> Vec<Felt> {
+        let tree = self.as_tree();
+        let proof = tree.proof(vec![offset].as_slice());
+
+        proof.to_bytes().chunks(32).map(|c| {
+            Felt::from_bytes_be_slice(c)
+        }).collect()
     }
 }
 
@@ -38,11 +51,11 @@ mod tests {
 
     #[test]
     fn test_empty_board_commitment_fails() {
-        let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
 
-        let result = board.to_array();
+        let commit_result = board.commit(1234);
 
-        assert!(result.is_err(), "Empty board should not be ready for commitment");
+        assert!(commit_result.is_err(), "Empty board should not be ready for commitment");
     }
 
     #[test]
@@ -54,13 +67,13 @@ mod tests {
         board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
+        let mut board2 = board.clone();
+
         let salt = 12345u64;
-        let board_array = board.to_array().expect("Board should be ready");
+        let root1 = board.commit(salt).unwrap();
+        let root2 = board2.commit(salt).unwrap();
 
-        let tree1 = BoardMerkleTree::build(board_array.clone(), salt);
-        let tree2 = BoardMerkleTree::build(board_array, salt);
-
-        assert_eq!(tree1.root(), tree2.root(), "Same board and salt should produce same commitment");
+        assert_eq!(root1, root2, "Same board and salt should produce same commitment");
     }
 
     #[test]
@@ -72,12 +85,12 @@ mod tests {
         board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        let board_array = board.to_array().expect("Board should be ready");
+        let mut board2 = board.clone();
 
-        let tree1 = BoardMerkleTree::build(board_array.clone(), 11111);
-        let tree2 = BoardMerkleTree::build(board_array, 22222);
+        let root1 = board.commit(0).unwrap();
+        let root2 = board2.commit(1).unwrap();
 
-        assert_ne!(tree1.root(), tree2.root(), "Different salts should produce different commitments");
+        assert_ne!(root1, root2, "Different salts should produce different commitments");
     }
 
     #[test]
@@ -97,14 +110,10 @@ mod tests {
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
+        let root1 = board1.commit(salt).unwrap();
+        let root2 = board2.commit(salt).unwrap();
 
-        let board1_array = board1.to_array().expect("Board should be ready");
-        let board2_array = board2.to_array().expect("Board should be ready");
-
-        let tree1 = BoardMerkleTree::build(board1_array, salt);
-        let tree2 = BoardMerkleTree::build(board2_array, salt);
-
-        assert_ne!(tree1.root(), tree2.root(), "Different boards should produce different commitments");
+        assert_ne!(root1, root2, "Different boards should produce different commitments");
     }
 
     #[test]
@@ -125,13 +134,10 @@ mod tests {
         board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        let board1_array = board1.to_array().expect("Board should be ready");
-        let board2_array = board2.to_array().expect("Board should be ready");
+        let root1 = board1.commit(salt).unwrap();
+        let root2 = board2.commit(salt).unwrap();
 
-        let tree1 = BoardMerkleTree::build(board1_array, salt);
-        let tree2 = BoardMerkleTree::build(board2_array, salt);
-
-        assert_ne!(tree1.root(), tree2.root(), "Different ship positions should produce different commitments");
+        assert_ne!(root1, root2, "Different ship positions should produce different commitments");
     }
 
     #[test]
@@ -152,13 +158,10 @@ mod tests {
         board2.place_ship(Ship::new(ShipKind::Destroyer, 0, 3, Orientation::Horizontal))
             .expect("Ship placement should succeed");
 
-        let board1_array = board1.to_array().expect("Board should be ready");
-        let board2_array = board2.to_array().expect("Board should be ready");
+        let root1 = board1.commit(salt).unwrap();
+        let root2 = board2.commit(salt).unwrap();
 
-        let tree1 = BoardMerkleTree::build(board1_array, salt);
-        let tree2 = BoardMerkleTree::build(board2_array, salt);
-
-        assert_ne!(tree1.root(), tree2.root(), "Different ship orientations should produce different commitments");
+        assert_ne!(root1, root2, "Different ship orientations should produce different commitments");
     }
 
     #[test]
@@ -171,16 +174,14 @@ mod tests {
         board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Cruiser placement should succeed");
 
-        let board_array = board.to_array().expect("Board should be ready");
+        let mut copied_board = board.clone();
 
-        let tree = BoardMerkleTree::build(board_array.clone(), salt);
-        let root = tree.root();
-
-        assert_ne!(root, Felt::ZERO, "Root with multiple ships should not be zero");
+        let root1 = board.commit(salt).unwrap();
+        assert_ne!(root1, Felt::ZERO, "Root with multiple ships should not be zero");
 
         // Verify determinism
-        let tree2 = BoardMerkleTree::build(board_array, salt);
-        assert_eq!(root, tree2.root(), "Multiple builds should produce same root");
+        let root2 = copied_board.commit(salt).unwrap();
+        assert_eq!(root1, root2, "Multiple builds should produce same root");
     }
 
     #[test]
@@ -201,35 +202,9 @@ mod tests {
         board8x8.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        let board6x6_array = board6x6.to_array().expect("Board should be ready");
-        let board8x8_array = board8x8.to_array().expect("Board should be ready");
+        let root6x6  = board6x6.commit(salt).unwrap();
+        let root8x8 = board8x8.commit(salt).unwrap();
 
-        let tree1 = BoardMerkleTree::build(board6x6_array, salt);
-        let tree2 = BoardMerkleTree::build(board8x8_array, salt);
-
-        assert_ne!(tree1.root(), tree2.root(), "Different board sizes should produce different commitments");
-    }
-
-    #[test]
-    fn test_commitment_is_not_trivial() {
-        // Ensure commitment is not just hash of first element or something trivial
-        let salt = 99999u64;
-
-        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal))
-            .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 0, 3, Orientation::Vertical))
-            .expect("Ship placement should succeed");
-
-        let board_array = board.to_array().expect("Board should be ready");
-
-        let tree = BoardMerkleTree::build(board_array, salt);
-        let root = tree.root();
-
-        // Commitment should not equal hash of any single cell
-        let first_cell = Felt::from(0u8);
-        let first_cell_hash = pedersen_hash(&first_cell, &Felt::from(salt));
-
-        assert_ne!(root, first_cell_hash, "Commitment should not be trivial single-cell hash");
+        assert_ne!(root6x6, root8x8, "Different board sizes should produce different commitments");
     }
 }

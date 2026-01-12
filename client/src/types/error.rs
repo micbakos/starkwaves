@@ -25,4 +25,16 @@ pub enum GameError {
 
     #[error("All ships are not placed in board")]
     BoardNotReady,
+
+    #[error("({x}, {y}) was bombed already")]
+    BombedAlready { x: u8, y: u8 },
+
+    #[error("Board is already committed")]
+    BoardAlreadyCommitted,
+
+    #[error("All ships are placed in board")]
+    AllShipsPlaced,
+
+    #[error("Game is over")]
+    GameOver,
 }

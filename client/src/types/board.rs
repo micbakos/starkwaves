@@ -1,37 +1,49 @@
-use std::collections::HashMap;
 use super::orientation::Orientation;
 use super::result::Result;
 use super::ship::Ship;
-use crate::types::board_size::BoardSize;
-use crate::types::error::GameError::{BoardNotReady, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
-use crate::types::{Cell, ShipKind};
-use std::fmt;
-use starknet::core::types::Felt;
 use crate::merkle::board_merkle_tree::BoardMerkleTree;
+use crate::types::board_size::BoardSize;
+use crate::types::error::GameError::{AllShipsPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
+use crate::types::fire_report::FireReport;
+use crate::types::{Cell, ShipKind};
+use starknet::core::types::Felt;
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     size: BoardSize,
-    cells: Vec<Cell>,
-    ships_placed: Vec<ShipKind>,
+    ships: Vec<Ship>,
+    commitment_tree: Option<BoardMerkleTree>,
+    bombs: Vec<usize>,
 }
 
 impl Board {
     pub fn new(size: BoardSize) -> Board {
         Board {
             size,
-            cells: vec![Cell::Water; (size.size() * size.size()) as usize],
-            ships_placed: Vec::new(),
+            ships: Vec::new(),
+            commitment_tree: None,
+            bombs: Vec::new(),
         }
     }
 
     /// Places a ship on the board
     pub fn place_ship(&mut self, ship: Ship) -> Result<()> {
+        if self.commitment_tree.is_some() {
+            return Err(BoardAlreadyCommitted);
+        }
+
+        if self.is_board_ready() {
+            return Err(AllShipsPlaced);
+        }
+
         let counts = self.size.ship_kinds_count(&ship.kind);
 
         let mut ship_kind_occurrences = 0;
-        self.ships_placed.iter().for_each(|kind| {
-            if kind == &ship.kind {
+        self.ships.iter().for_each(|s| {
+            if s.kind == ship.kind {
                 ship_kind_occurrences += 1;
             }
         });
@@ -47,15 +59,27 @@ impl Board {
         match ship.orientation {
             Orientation::Horizontal => {
                 if ship.y + length > board_size {
-                    return Err(InvalidShipPlacementBounds { ship: ship.kind, x: ship.x, y: ship.y, orientation: ship.orientation });
+                    return Err(InvalidShipPlacementBounds {
+                        ship: ship.kind,
+                        x: ship.x,
+                        y: ship.y,
+                        orientation: ship.orientation,
+                    });
                 }
             }
             Orientation::Vertical => {
                 if ship.x + length > board_size {
-                    return Err(InvalidShipPlacementBounds { ship: ship.kind, x: ship.x, y: ship.y, orientation: ship.orientation });
+                    return Err(InvalidShipPlacementBounds {
+                        ship: ship.kind,
+                        x: ship.x,
+                        y: ship.y,
+                        orientation: ship.orientation,
+                    });
                 }
             }
         }
+
+        let cells_before_insert = self.cells();
 
         // Check for overlaps and place ship
         for i in 0..length {
@@ -65,8 +89,8 @@ impl Board {
             };
 
             let offset = self.to_offset(x, y);
-            if self.cells[offset] != Cell::Water {
-                return Err(InvalidShipPlacementCollides{
+            if cells_before_insert[offset] != Cell::Water {
+                return Err(InvalidShipPlacementCollides {
                     ship: ship.kind,
                     x: ship.x,
                     y: ship.y,
@@ -77,47 +101,135 @@ impl Board {
             }
         }
 
-        // Place the ship
-        for i in 0..length {
-            let (x, y) = match ship.orientation {
-                Orientation::Horizontal => (ship.x, ship.y + i),
-                Orientation::Vertical => (ship.x + i, ship.y),
-            };
-            let offset = self.to_offset(x, y);
-            self.cells[offset] = Cell::Ship(ship.kind);
-        }
-        self.ships_placed.push(ship.kind);
-
+        self.ships.push(ship);
         Ok(())
-    }
-
-    /// Converts the board to a flat vec of u8 (for hashing)
-    pub fn to_array(&self) -> Result<Vec<u8>> {
-        if !self.is_board_ready() {
-            Err(BoardNotReady)?;
-        }
-
-        let size = self.size.size();
-        let total = (size * size) as usize;
-        let mut arr = Vec::with_capacity(total);
-
-        for i in 0..total {
-            arr.push(match self.cells[i] {
-                Cell::Water => 0,
-                Cell::Ship(kind) => kind.id()
-            })
-        }
-
-        Ok(arr)
     }
 
     /// Generates a merkle tree that proves the state of the board on each cell in
     /// combination with the given salt.
-    pub fn commitment(&self, salt: u64) -> Result<Felt> {
+    pub fn commit(&mut self, salt: u64) -> Result<Felt> {
+        if self.commitment_tree.is_some() {
+            return Err(BoardAlreadyCommitted);
+        }
+
         let array = self.to_array()?;
 
         let tree = BoardMerkleTree::build(array, salt);
+        self.commitment_tree = Some(tree.clone());
         Ok(tree.root())
+    }
+
+    pub fn receive_fire(&mut self, x: u8, y: u8) -> Result<FireReport> {
+        let offset = self.to_offset(x, y);
+        if self
+            .bombs
+            .iter()
+            .cloned()
+            .find(|index| *index == offset)
+            .is_some()
+        {
+            return Err(BombedAlready { x, y });
+        }
+
+        let hits = self.hit_ships();
+
+        let destroyed = hits.clone().into_iter().filter(|(id, hits)| {
+            let ship = self.ships.iter().find(|s| s.id == *id).expect("Ship should exist");
+            ship.kind.length() == *hits
+        }).map(|(id, _)| { id }).collect::<HashSet<_>>();
+
+        let all_ships = self.ships.iter().map(|s| s.id).collect::<HashSet<_>>();
+        if destroyed.symmetric_difference(&all_ships).count() == 0 {
+            return Err(GameOver);
+        }
+
+        let proof = self
+            .commitment_tree
+            .clone()
+            .map(|tree| tree.proof(offset))
+            .ok_or(BoardNotReady)?;
+
+        let cells = self.cells();
+        let cell = cells[offset];
+
+        let report = match cell {
+            Cell::Water => FireReport::miss(proof),
+            Cell::Ship(id) => {
+                let ship = self
+                    .ships
+                    .iter()
+                    .find(|ship| ship.id == id)
+                    .expect("Ship should exist");
+                let hit_count = hits.get(&id).unwrap_or(&0);
+
+                if *hit_count == ship.kind.length() - 1 {
+                    FireReport::hit_with_destruction(*ship, proof)
+                } else {
+                    FireReport::hit(ship.kind, proof)
+                }
+            }
+        };
+
+        self.bombs.push(offset);
+
+        Ok(report)
+    }
+
+    fn cells(&self) -> Vec<Cell> {
+        let board_size = self.size.size();
+        let mut cells = Vec::with_capacity((board_size * board_size) as usize);
+        for _ in 0..cells.capacity() {
+            cells.push(Cell::Water);
+        }
+
+        self.ships.iter().for_each(|ship| {
+            let ship_len = ship.kind.length();
+
+            for i in 0..ship_len {
+                let (x, y) = match ship.orientation {
+                    Orientation::Horizontal => (ship.x, ship.y + i),
+                    Orientation::Vertical => (ship.x + i, ship.y),
+                };
+
+                let offset = self.to_offset(x, y);
+                cells[offset] = Cell::Ship(ship.id);
+            }
+        });
+
+        cells
+    }
+
+    fn to_array(&self) -> Result<Vec<u8>> {
+        if !self.is_board_ready() {
+            Err(BoardNotReady)?;
+        }
+
+        let mut ids = Vec::<u8>::new();
+        for cell in self.cells() {
+            let id = cell
+                .ship(&self.ships)
+                .map(|ship| ship.kind.id())
+                .unwrap_or(0);
+
+            ids.push(id);
+        }
+
+        Ok(ids)
+    }
+
+    fn hit_ships(&mut self) -> HashMap<Uuid, u8> {
+        let mut hits = HashMap::<Uuid, u8>::new();
+        let cells = self.cells();
+
+        self.bombs.iter().for_each(|index| {
+            let cell = cells[*index];
+            if let Cell::Ship(ship_id) = cell {
+                let bomb_count = hits.get(&ship_id).unwrap_or(&0);
+                hits.insert(ship_id, bomb_count + 1);
+            }
+        });
+
+        hits
     }
 
     fn to_offset(&self, x: u8, y: u8) -> usize {
@@ -129,9 +241,9 @@ impl Board {
     fn is_board_ready(&self) -> bool {
         let mut kinds_placed = HashMap::<ShipKind, u8>::new();
 
-        self.ships_placed.iter().for_each(|kind| {
-            let occurrences = kinds_placed.get(kind).unwrap_or(&0);
-            kinds_placed.insert(*kind, occurrences + 1);
+        self.ships.iter().for_each(|ship| {
+            let occurrences = kinds_placed.get(&ship.kind).unwrap_or(&0);
+            kinds_placed.insert(ship.kind, occurrences + 1);
         });
 
         ShipKind::all().iter().all(|kind| {
@@ -151,8 +263,8 @@ impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let size = self.size.size() as usize;
         let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
-        let row = | items: &[&str], index: Option<usize> | -> String {
-            let sanitize = | text: &str | {
+        let row = |items: &[&str], index: Option<usize>| -> String {
+            let sanitize = |text: &str| {
                 if text.len() != 2 && text.len() != 4 {
                     panic!("Each text on grid should be 2 or 4 chars. Was `{}`.", &text);
                 }
@@ -190,25 +302,61 @@ impl fmt::Display for Board {
             return row;
         };
 
-        let column_titles = (1..size + 1).map(|i| {
-            if i < 10 { format!("0{i}") } else { format!("{i}") }
-        }).collect::<Vec<_>>();
+        let column_titles = (1..size + 1)
+            .map(|i| {
+                if i < 10 {
+                    format!("0{i}")
+                } else {
+                    format!("{i}")
+                }
+            })
+            .collect::<Vec<_>>();
 
         writeln!(f, "{}", row(divider_items.as_slice(), None))?;
-        writeln!(f, "{}", row(column_titles.iter().map(|i| i.as_str()).collect::<Vec<_>>().as_slice(), None))?;
-        let rows = self.cells.chunks(size).collect::<Vec<_>>();
+        writeln!(
+            f,
+            "{}",
+            row(
+                column_titles
+                    .iter()
+                    .map(|i| i.as_str())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                None
+            )
+        )?;
+        let cells = self.cells();
+        let rows = cells.chunks(size).collect::<Vec<_>>();
         for (index, cells) in rows.iter().enumerate() {
-            let cells_formatted = cells.into_iter().map(|cell| {
-                match cell {
+            let cells_formatted = cells
+                .into_iter()
+                .map(|cell| match cell {
                     Cell::Water => "~~".to_string(),
-                    Cell::Ship(ship) => format!("{}", ship.code()).to_string(),
-                }
-            }).collect::<Vec<_>>();
+                    Cell::Ship(ship_id) => {
+                        let ship = self
+                            .ships
+                            .iter()
+                            .find(|ship| ship.id.as_bytes() == ship_id.as_bytes())
+                            .expect(
+                                format!("Ship id {} should exist but not found.", ship_id).as_str(),
+                            );
+                        format!("{}", ship.kind.code()).to_string()
+                    }
+                })
+                .collect::<Vec<_>>();
 
-            writeln!(f, "{}", row(
-                cells_formatted.iter().map(|cell| cell.as_str()).collect::<Vec<_>>().as_slice(),
-                Some(index)
-            ))?;
+            writeln!(
+                f,
+                "{}",
+                row(
+                    cells_formatted
+                        .iter()
+                        .map(|cell| cell.as_str())
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    Some(index)
+                )
+            )?;
         }
         writeln!(f, "{}", row(divider_items.as_slice(), None))?;
         Ok(())
@@ -219,35 +367,40 @@ impl fmt::Display for Board {
 mod tests {
     use super::*;
     use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+    use crate::types::fire_report::FireStatus;
 
     #[test]
     fn test_new_board_standard() {
         let board = Board::new(BoardSize::Standard);
+        let cells = board.cells();
         assert_eq!(board.size, BoardSize::Standard);
-        assert_eq!(board.cells.len(), 100); // 10x10
-        assert!(board.cells.iter().all(|c| c == &Cell::Water));
-        assert_eq!(board.ships_placed.len(), 0);
+        assert_eq!(cells.len(), 100); // 10x10
+        assert!(cells.iter().all(|c| c == &Cell::Water));
+        assert_eq!(board.ships.len(), 0);
     }
 
     #[test]
     fn test_new_board_smaller() {
         let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        assert_eq!(board.cells.len(), 36); // 6x6
-        assert!(board.cells.iter().all(|c| c == &Cell::Water));
+        let cells = board.cells();
+        assert_eq!(cells.len(), 36); // 6x6
+        assert!(cells.iter().all(|c| c == &Cell::Water));
     }
 
     #[test]
     fn test_new_board_larger() {
         let board = Board::new(BoardSize::Larger(LargerBoardSize::TwelveByTwelve));
-        assert_eq!(board.cells.len(), 144); // 12x12
-        assert!(board.cells.iter().all(|c| c == &Cell::Water));
+        let cells = board.cells();
+        assert_eq!(cells.len(), 144); // 12x12
+        assert!(cells.iter().all(|c| c == &Cell::Water));
     }
 
     #[test]
     fn test_default_board() {
         let board = Board::default();
+        let cells = board.cells();
         assert_eq!(board.size, BoardSize::Standard);
-        assert_eq!(board.cells.len(), 100);
+        assert_eq!(cells.len(), 100);
     }
 
     #[test]
@@ -256,12 +409,13 @@ mod tests {
         let ship = Ship::new(ShipKind::Destroyer, 2, 3, Orientation::Horizontal);
 
         assert!(board.place_ship(ship).is_ok());
+        let cells = board.cells();
 
         // Verify ship is placed correctly (Destroyer has length 2)
-        assert_eq!(board.cells[board.to_offset(2, 3)], Cell::Ship(ShipKind::Destroyer));
-        assert_eq!(board.cells[board.to_offset(2, 4)], Cell::Ship(ShipKind::Destroyer));
-        assert_eq!(board.ships_placed.len(), 1);
-        assert_eq!(board.ships_placed[0], ShipKind::Destroyer);
+        cells[board.to_offset(2, 3)].assert_kind(&board.ships, ShipKind::Destroyer);
+        cells[board.to_offset(2, 4)].assert_kind(&board.ships, ShipKind::Destroyer);
+        assert_eq!(board.ships.len(), 1);
+        assert_eq!(board.ships[0].kind, ShipKind::Destroyer);
     }
 
     #[test]
@@ -270,11 +424,12 @@ mod tests {
         let ship = Ship::new(ShipKind::Cruiser, 1, 1, Orientation::Vertical);
 
         assert!(board.place_ship(ship).is_ok());
+        let cells = board.cells();
 
         // Verify ship is placed correctly (Cruiser has length 3)
-        assert_eq!(board.cells[board.to_offset(1, 1)], Cell::Ship(ShipKind::Cruiser));
-        assert_eq!(board.cells[board.to_offset(2, 1)], Cell::Ship(ShipKind::Cruiser));
-        assert_eq!(board.cells[board.to_offset(3, 1)], Cell::Ship(ShipKind::Cruiser));
+        cells[board.to_offset(1, 1)].assert_kind(&board.ships, ShipKind::Cruiser);
+        cells[board.to_offset(2, 1)].assert_kind(&board.ships, ShipKind::Cruiser);
+        cells[board.to_offset(3, 1)].assert_kind(&board.ships, ShipKind::Cruiser);
     }
 
     #[test]
@@ -284,7 +439,10 @@ mod tests {
 
         let result = board.place_ship(ship);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InvalidShipPlacementBounds { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            InvalidShipPlacementBounds { .. }
+        ));
     }
 
     #[test]
@@ -294,7 +452,10 @@ mod tests {
 
         let result = board.place_ship(ship);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InvalidShipPlacementBounds { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            InvalidShipPlacementBounds { .. }
+        ));
     }
 
     #[test]
@@ -310,7 +471,10 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InvalidShipPlacementCollides { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            InvalidShipPlacementCollides { .. }
+        ));
     }
 
     #[test]
@@ -326,7 +490,10 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InvalidShipPlacementCollides { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            InvalidShipPlacementCollides { .. }
+        ));
     }
 
     #[test]
@@ -342,7 +509,10 @@ mod tests {
         let result = board.place_ship(ship2);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            InvalidShipPlacementKind { .. }
+        ));
     }
 
     #[test]
@@ -355,7 +525,7 @@ mod tests {
 
         assert!(board.place_ship(ship1).is_ok());
         assert!(board.place_ship(ship2).is_ok());
-        assert_eq!(board.ships_placed.len(), 2);
+        assert_eq!(board.ships.len(), 2);
 
         // Third Destroyer should fail
         let ship3 = Ship::new(ShipKind::Destroyer, 8, 8, Orientation::Horizontal);
@@ -375,11 +545,36 @@ mod tests {
     fn test_to_array_with_ships() {
         let mut board = Board::new(BoardSize::Standard);
         // Complete 10x10 board: needs Carrier, Battleship, Cruiser, Submarine, Destroyer (1 each)
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal)).unwrap();
-        board.place_ship(Ship::new(ShipKind::Carrier, 2, 0, Orientation::Horizontal)).unwrap();
-        board.place_ship(Ship::new(ShipKind::Battleship, 4, 0, Orientation::Horizontal)).unwrap();
-        board.place_ship(Ship::new(ShipKind::Cruiser, 6, 0, Orientation::Horizontal)).unwrap();
-        board.place_ship(Ship::new(ShipKind::Submarine, 8, 0, Orientation::Horizontal)).unwrap();
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .unwrap();
+        board
+            .place_ship(Ship::new(ShipKind::Carrier, 2, 0, Orientation::Horizontal))
+            .unwrap();
+        board
+            .place_ship(Ship::new(
+                ShipKind::Battleship,
+                4,
+                0,
+                Orientation::Horizontal,
+            ))
+            .unwrap();
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 6, 0, Orientation::Horizontal))
+            .unwrap();
+        board
+            .place_ship(Ship::new(
+                ShipKind::Submarine,
+                8,
+                0,
+                Orientation::Horizontal,
+            ))
+            .unwrap();
 
         let array = board.to_array().expect("Board should be ready");
 
@@ -449,66 +644,129 @@ mod tests {
 
     #[test]
     fn test_board_commitment_deterministic() {
-        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        // Board 1
+        let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Board 2 with identical setup
+        let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
 
-        let commitment1 = board.commitment(salt).expect("Board should be ready");
-        let commitment2 = board.commitment(salt).expect("Board should be ready");
+        let commitment1 = board1.commit(salt).expect("Board should be ready");
+        let commitment2 = board2.commit(salt).expect("Board should be ready");
 
-        assert_eq!(commitment1, commitment2, "Same board and salt should produce same commitment");
+        assert_eq!(
+            commitment1, commitment2,
+            "Same board and salt should produce same commitment"
+        );
     }
 
     #[test]
     fn test_board_commitment_empty_board_fails() {
-        let board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         let salt = 99999u64;
 
-        let result = board.commitment(salt);
+        let result = board.commit(salt);
 
-        assert!(result.is_err(), "Empty board should not be ready for commitment");
+        assert!(
+            result.is_err(),
+            "Empty board should not be ready for commitment"
+        );
     }
 
     #[test]
     fn test_board_commitment_different_salt() {
-        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        // Board 1 with salt 11111
+        let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        let commitment1 = board.commitment(11111).expect("Board should be ready");
-        let commitment2 = board.commitment(22222).expect("Board should be ready");
+        // Board 2 with salt 22222 (same ship placement)
+        let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
 
-        assert_ne!(commitment1, commitment2, "Different salts should produce different commitments");
+        let commitment1 = board1.commit(11111).expect("Board should be ready");
+        let commitment2 = board2.commit(22222).expect("Board should be ready");
+
+        assert_ne!(
+            commitment1, commitment2,
+            "Different salts should produce different commitments"
+        );
     }
 
     #[test]
     fn test_board_commitment_different_ships() {
         // Board 1: Complete board with Destroyer and Cruiser at one position
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Board 2: Complete board with Destroyer and Cruiser at different positions
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 1, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Destroyer, 3, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
 
-        assert_ne!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
-            "Different ship arrangements should produce different commitments");
+        assert_ne!(
+            board1.commit(salt).unwrap(),
+            board2.commit(salt).unwrap(),
+            "Different ship arrangements should produce different commitments"
+        );
     }
 
     #[test]
@@ -517,20 +775,37 @@ mod tests {
 
         // Board 1: Complete board with ships at position 1
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Board 2: Complete board with ships at position 2
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 3, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                3,
+                3,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        assert_ne!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
-            "Same ship at different positions should produce different commitments");
+        assert_ne!(
+            board1.commit(salt).unwrap(),
+            board2.commit(salt).unwrap(),
+            "Same ship at different positions should produce different commitments"
+        );
     }
 
     #[test]
@@ -538,17 +813,25 @@ mod tests {
         let salt = 12345u64;
 
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Destroyer placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Cruiser placement should succeed");
 
-        let commitment = board.commitment(salt).expect("Board should be ready");
+        let commitment = board.commit(salt).expect("Board should be ready");
 
-        assert_ne!(commitment, Felt::ZERO, "Board with multiple ships should produce non-zero commitment");
-
-        // Verify it's still deterministic
-        assert_eq!(commitment, board.commitment(salt).unwrap(), "Commitment should be deterministic");
+        assert_ne!(
+            commitment,
+            Felt::ZERO,
+            "Board with multiple ships should produce non-zero commitment"
+        );
     }
 
     #[test]
@@ -557,41 +840,812 @@ mod tests {
 
         // Board 1: Destroyer first, then Cruiser
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 2, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 2, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Board 2: Cruiser first, then Destroyer
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 2, 2, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 2, Orientation::Vertical))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
 
         // Commitments should be the same (only final board state matters, not placement order)
-        assert_eq!(board1.commitment(salt).unwrap(), board2.commitment(salt).unwrap(),
-            "Placement order should not affect commitment (only final board state matters)");
+        assert_eq!(
+            board1.commit(salt).unwrap(),
+            board2.commit(salt).unwrap(),
+            "Placement order should not affect commitment (only final board state matters)"
+        );
     }
 
     #[test]
     fn test_board_commitment_standard_size() {
         let mut board = Board::new(BoardSize::Standard);
         // Complete 10x10 board: needs Carrier, Battleship, Cruiser, Submarine, Destroyer (1 each)
-        board.place_ship(Ship::new(ShipKind::Carrier, 0, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(ShipKind::Carrier, 0, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Battleship, 2, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Battleship,
+                2,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 4, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 4, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Submarine, 6, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Submarine,
+                6,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Destroyer, 8, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                8,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
-        let commitment = board.commitment(salt).expect("Board should be ready");
+        let commitment = board.commit(salt).expect("Board should be ready");
 
-        assert_ne!(commitment, Felt::ZERO, "Standard board should produce non-zero commitment");
+        assert_ne!(
+            commitment,
+            Felt::ZERO,
+            "Standard board should produce non-zero commitment"
+        );
+    }
+
+    // ===== Fire and Hit Tests =====
+
+    #[test]
+    fn test_hit_ships_no_bombs() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        let hits = board.hit_ships();
+
+        assert_eq!(
+            hits.len(),
+            0,
+            "No ships should be hit when no bombs have been dropped"
+        );
+    }
+
+    #[test]
+    fn test_hit_ships_single_hit() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let destroyer_id = destroyer.id;
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit the destroyer once at (0, 0)
+        board.receive_fire(0, 0).expect("Fire should succeed");
+
+        let hits = board.hit_ships();
+
+        assert_eq!(hits.len(), 1, "One ship should be hit");
+        assert_eq!(
+            *hits.get(&destroyer_id).unwrap(),
+            1,
+            "Destroyer should have 1 hit"
+        );
+    }
+
+    #[test]
+    fn test_hit_ships_multiple_hits_same_ship() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let destroyer_id = destroyer.id;
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit the destroyer twice at (0, 0) and (0, 1)
+        board.receive_fire(0, 0).expect("Fire should succeed");
+        board.receive_fire(0, 1).expect("Fire should succeed");
+
+        let hits = board.hit_ships();
+
+        assert_eq!(hits.len(), 1, "One ship should be hit");
+        assert_eq!(
+            *hits.get(&destroyer_id).unwrap(),
+            2,
+            "Destroyer should have 2 hits"
+        );
+    }
+
+    #[test]
+    fn test_hit_ships_multiple_ships() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let cruiser = Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical);
+        let destroyer_id = destroyer.id;
+        let cruiser_id = cruiser.id;
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(cruiser)
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit destroyer at (0, 0) and cruiser at (2, 1)
+        board.receive_fire(0, 0).expect("Fire should succeed");
+        board.receive_fire(2, 1).expect("Fire should succeed");
+
+        let hits = board.hit_ships();
+
+        assert_eq!(hits.len(), 2, "Two ships should be hit");
+        assert_eq!(
+            *hits.get(&destroyer_id).unwrap(),
+            1,
+            "Destroyer should have 1 hit"
+        );
+        assert_eq!(
+            *hits.get(&cruiser_id).unwrap(),
+            1,
+            "Cruiser should have 1 hit"
+        );
+    }
+
+    #[test]
+    fn test_hit_ships_with_misses() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let destroyer_id = destroyer.id;
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit water and ship
+        board.receive_fire(5, 5).expect("Fire should succeed"); // Miss
+        board.receive_fire(0, 0).expect("Fire should succeed"); // Hit
+
+        let hits = board.hit_ships();
+
+        assert_eq!(hits.len(), 1, "Only one ship should be hit");
+        assert_eq!(
+            *hits.get(&destroyer_id).unwrap(),
+            1,
+            "Destroyer should have 1 hit"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_miss() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        let report = board.receive_fire(5, 5).expect("Fire should succeed");
+
+        assert_eq!(FireStatus::Miss, report.status, "Should be a miss");
+        assert!(
+            report.ship_destroyed.is_none(),
+            "No ship should be destroyed"
+        );
+        assert!(!report.proof.is_empty(), "Proof should be provided");
+    }
+
+    #[test]
+    fn test_receive_fire_hit() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        let report = board.receive_fire(0, 0).expect("Fire should succeed");
+
+        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report.status, "Should be a hit");
+        assert!(
+            report.ship_destroyed.is_none(),
+            "Ship should not be destroyed yet"
+        );
+        assert!(!report.proof.is_empty(), "Proof should be provided");
+    }
+
+    #[test]
+    fn test_receive_fire_destroy_destroyer() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit first cell
+        let report1 = board.receive_fire(0, 0).expect("Fire should succeed");
+        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report1.status, "First hit should succeed");
+        assert!(report1.ship_destroyed.is_none(), "Ship not destroyed yet");
+
+        // Hit second cell - should destroy destroyer (length 2)
+        let report2 = board.receive_fire(0, 1).expect("Fire should succeed");
+        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report2.status, "Second hit should succeed");
+        assert!(report2.ship_destroyed.is_some(), "Ship should be destroyed");
+        assert_eq!(
+            report2.ship_destroyed.unwrap().kind,
+            ShipKind::Destroyer,
+            "Destroyed ship should be Destroyer"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_destroy_cruiser() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        let cruiser = Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical);
+        board
+            .place_ship(cruiser)
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit cruiser 3 times (length 3)
+        board.receive_fire(2, 1).expect("Fire should succeed");
+        board.receive_fire(3, 1).expect("Fire should succeed");
+        let report = board.receive_fire(4, 1).expect("Fire should succeed");
+
+        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report.status, "Should be a hit");
+        assert!(report.ship_destroyed.is_some(), "Ship should be destroyed");
+        assert_eq!(
+            report.ship_destroyed.unwrap().kind,
+            ShipKind::Cruiser,
+            "Destroyed ship should be Cruiser"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_already_bombed() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // First fire should succeed
+        board.receive_fire(0, 0).expect("First fire should succeed");
+
+        // Second fire at same location should fail
+        let result = board.receive_fire(0, 0);
+        assert!(
+            result.is_err(),
+            "Should not be able to bomb same location twice"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_without_commitment() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Don't commit - board not ready
+
+        let result = board.receive_fire(0, 0);
+        assert!(
+            result.is_err(),
+            "Should not be able to fire without commitment"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_vertical_ship() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Hit vertical cruiser at different x coordinates
+        let report1 = board.receive_fire(2, 1).expect("Fire should succeed");
+        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report1.status, "Should be a hit");
+
+        let report2 = board.receive_fire(3, 1).expect("Fire should succeed");
+        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report2.status, "Should be a hit");
+
+        let report3 = board.receive_fire(4, 1).expect("Fire should succeed");
+        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report3.status, "Should be a hit");
+        assert!(
+            report3.ship_destroyed.is_some(),
+            "Cruiser should be destroyed"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_multiple_ships_destroyed() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        let destroyer = Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal);
+        let cruiser = Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical);
+        board
+            .place_ship(destroyer)
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(cruiser)
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Destroy destroyer
+        board.receive_fire(0, 0).expect("Fire should succeed");
+        let destroyer_destroyed = board.receive_fire(0, 1).expect("Fire should succeed");
+        assert!(
+            destroyer_destroyed.ship_destroyed.is_some(),
+            "Destroyer should be destroyed"
+        );
+        assert_eq!(
+            destroyer_destroyed.ship_destroyed.unwrap().kind,
+            ShipKind::Destroyer
+        );
+
+        // Destroy cruiser
+        board.receive_fire(2, 1).expect("Fire should succeed");
+        board.receive_fire(3, 1).expect("Fire should succeed");
+        let cruiser_destroyed = board.receive_fire(4, 1).expect("Fire should succeed");
+        assert!(
+            cruiser_destroyed.ship_destroyed.is_some(),
+            "Cruiser should be destroyed"
+        );
+        assert_eq!(
+            cruiser_destroyed.ship_destroyed.unwrap().kind,
+            ShipKind::Cruiser
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_proof_always_present() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Test hit
+        let hit_report = board.receive_fire(0, 0).expect("Fire should succeed");
+        assert!(!hit_report.proof.is_empty(), "Hit should include proof");
+
+        // Test miss
+        let miss_report = board.receive_fire(5, 5).expect("Fire should succeed");
+        assert!(!miss_report.proof.is_empty(), "Miss should include proof");
+
+        // Test destruction
+        let destroy_report = board.receive_fire(0, 1).expect("Fire should succeed");
+        assert!(
+            !destroy_report.proof.is_empty(),
+            "Destruction should include proof"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_game_over() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Destroy all ships
+        // Destroyer: (0,0) and (0,1)
+        board.receive_fire(0, 0).expect("Fire should succeed");
+        board.receive_fire(0, 1).expect("Fire should succeed");
+
+        // Cruiser: (2,1), (3,1), (4,1)
+        board.receive_fire(2, 1).expect("Fire should succeed");
+        board.receive_fire(3, 1).expect("Fire should succeed");
+        board.receive_fire(4, 1).expect("Fire should succeed");
+
+        // Try to fire again - should return GameOver error
+        let result = board.receive_fire(5, 5);
+        assert!(result.is_err(), "Should return error when game is over");
+        assert!(
+            matches!(result.unwrap_err(), GameOver),
+            "Error should be GameOver"
+        );
+    }
+
+    #[test]
+    fn test_place_ship_after_board_ready() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Board is now ready (all required ships placed)
+        assert!(board.is_board_ready(), "Board should be ready");
+
+        // Try to place another ship
+        let result = board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal));
+        assert!(result.is_err(), "Should not be able to place ship when board is ready");
+        assert!(
+            matches!(result.unwrap_err(), AllShipsPlaced),
+            "Error should be AllShipsPlaced"
+        );
+    }
+
+    #[test]
+    fn test_place_ship_after_commitment() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Commit the board
+        board.commit(12345).expect("Commit should succeed");
+
+        // Try to place another ship after commitment
+        let result = board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal));
+        assert!(
+            result.is_err(),
+            "Should not be able to place ship after commitment"
+        );
+        println!("{:?}", result.clone().unwrap_err());
+        assert!(
+            matches!(result.unwrap_err(), BoardAlreadyCommitted),
+            "Error should be BoardAlreadyCommitted"
+        );
+    }
+
+    #[test]
+    fn test_commit_twice() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // First commit should succeed
+        let commitment1 = board.commit(12345).expect("First commit should succeed");
+        assert_ne!(commitment1, Felt::ZERO, "Commitment should be non-zero");
+
+        // Second commit should fail
+        let result = board.commit(67890);
+        assert!(result.is_err(), "Should not be able to commit twice");
+        assert!(
+            matches!(result.unwrap_err(), BoardAlreadyCommitted),
+            "Error should be BoardAlreadyCommitted"
+        );
+    }
+
+    #[test]
+    fn test_commit_incomplete_board() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        // Only place one ship (need Destroyer + Cruiser for 6x6)
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+
+        // Try to commit incomplete board
+        let result = board.commit(12345);
+        assert!(result.is_err(), "Should not be able to commit incomplete board");
+        assert!(
+            matches!(result.unwrap_err(), BoardNotReady),
+            "Error should be BoardNotReady"
+        );
+    }
+
+    #[test]
+    fn test_receive_fire_game_over_with_partial_hits() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Partially hit destroyer (only 1 of 2 cells)
+        board.receive_fire(0, 0).expect("Fire should succeed");
+
+        // Game should not be over yet - can still fire
+        let result = board.receive_fire(5, 5);
+        assert!(result.is_ok(), "Should be able to fire when game not over");
+    }
+
+    #[test]
+    fn test_place_ship_validates_ship_kind_count() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+
+        // Place Destroyer - should succeed
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("First Destroyer placement should succeed");
+
+        // Try to place another Destroyer - should fail (6x6 only allows 1)
+        let result = board.place_ship(Ship::new(
+            ShipKind::Destroyer,
+            2,
+            2,
+            Orientation::Horizontal,
+        ));
+        assert!(result.is_err(), "Should not allow more Destroyers than permitted");
+        assert!(
+            matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }),
+            "Error should be InvalidShipPlacementKind"
+        );
+    }
+
+    #[test]
+    fn test_place_ship_validates_ineligible_ship_kind() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+
+        // Try to place Carrier on 6x6 board (not allowed)
+        let result = board.place_ship(Ship::new(
+            ShipKind::Carrier,
+            0,
+            0,
+            Orientation::Horizontal,
+        ));
+        assert!(result.is_err(), "Should not allow ineligible ship kinds");
+        assert!(
+            matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }),
+            "Error should be InvalidShipPlacementKind"
+        );
+    }
+
+    #[test]
+    fn test_commit_preserves_board_state() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Get cells before commit
+        let cells_before = board.cells();
+
+        // Commit
+        board.commit(12345).expect("Commit should succeed");
+
+        // Get cells after commit - should be identical
+        let cells_after = board.cells();
+
+        assert_eq!(
+            cells_before.len(),
+            cells_after.len(),
+            "Cell count should not change after commit"
+        );
+
+        for (i, (before, after)) in cells_before.iter().zip(cells_after.iter()).enumerate() {
+            assert_eq!(
+                before, after,
+                "Cell {} should be identical before and after commit",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_receive_fire_sequence_tracking() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        board.commit(12345).expect("Board should be ready");
+
+        // Fire multiple times and verify hits are tracked correctly
+        board.receive_fire(0, 0).expect("Fire 1 should succeed"); // Hit destroyer
+        board.receive_fire(5, 5).expect("Fire 2 should succeed"); // Miss
+        board.receive_fire(2, 1).expect("Fire 3 should succeed"); // Hit cruiser
+
+        let hits = board.hit_ships();
+
+        // Should have 2 ships hit (Destroyer and Cruiser), each with 1 hit
+        assert_eq!(hits.len(), 2, "Should have 2 ships with hits");
+    }
+
+    #[test]
+    fn test_to_array_after_commit() {
+        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
+            .expect("Ship placement should succeed");
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+            .expect("Ship placement should succeed");
+
+        // Get array before commit
+        let array_before = board.to_array().expect("Should get array");
+
+        // Commit
+        board.commit(12345).expect("Commit should succeed");
+
+        // Get array after commit - should be identical
+        let array_after = board.to_array().expect("Should get array after commit");
+
+        assert_eq!(
+            array_before, array_after,
+            "Array should be identical before and after commit"
+        );
     }
 }

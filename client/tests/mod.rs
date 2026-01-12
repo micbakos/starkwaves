@@ -1,2 +1,2 @@
 pub(crate) mod cairo;
-pub(crate) mod rs_cairo_commitment;
+pub(crate) mod cairo_board_verifier;

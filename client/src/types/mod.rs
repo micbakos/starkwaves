@@ -6,6 +6,7 @@ pub mod cell;
 pub mod board_size;
 pub mod result;
 pub mod error;
+pub mod fire_report;
 
 pub use board::Board;
 pub use cell::Cell;

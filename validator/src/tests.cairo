@@ -1,5 +1,8 @@
+use core::pedersen::pedersen;
 use starkwaves_validator::types::{Orientation, Ship, ShipKind};
-use starkwaves_validator::validate_and_commit;
+use starkwaves_validator::{validate_and_commit, verify_report};
+use crate::merkle::{generate_proof, verify};
+use crate::{board, compute_merkle_root, verify_pedersen};
 
 // ===============================
 // Valid Board Tests
@@ -550,3 +553,58 @@ fn test_validate_and_commit_exact_same_position() {
     let salt: felt252 = 12345;
     validate_and_commit(ships, 10, salt);
 }
+
+#[test]
+fn test_generate_proof_verifies() {
+    let ships = array![
+        Ship { kind: ShipKind::Destroyer, x: 0, y: 0, orientation: Orientation::Horizontal },
+        Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
+    ];
+    let salt: felt252 = 1234;
+    let board = board(ships.span(), 6);
+
+    let root = compute_merkle_root(board.clone(), salt);
+    let proof = generate_proof(board.clone(), salt, 0);
+
+    let value: u8 = *board.get(0).unwrap().unbox();
+    let salted_value = pedersen(value.into(), salt);
+    let verified = verify(salted_value, proof, root, 0);
+    assert!(verified, "Should verify")
+}
+
+#[test]
+fn test_fake_value_correct_salt_does_not_verify() {
+    let ships = array![
+        Ship { kind: ShipKind::Destroyer, x: 0, y: 0, orientation: Orientation::Horizontal },
+        Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
+    ];
+    let salt: felt252 = 1234;
+    let board = board(ships.span(), 6);
+
+    let root = compute_merkle_root(board.clone(), salt);
+    let proof = generate_proof(board.clone(), salt, 0);
+
+    let value: u8 = 0; // Water (fake)
+    let salted_value = pedersen(value.into(), salt);
+    let verified = verify(salted_value, proof, root, 0);
+    assert!(!verified, "Should not verify")
+}
+
+#[test]
+fn test_correct_value_incorrect_salt_does_not_verify() {
+    let ships = array![
+        Ship { kind: ShipKind::Destroyer, x: 0, y: 0, orientation: Orientation::Horizontal },
+        Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
+    ];
+    let salt: felt252 = 1234;
+    let board = board(ships.span(), 6);
+
+    let root = compute_merkle_root(board.clone(), salt);
+    let proof = generate_proof(board.clone(), salt, 0);
+
+    let value: u8 = *board.get(0).unwrap().unbox();
+    let salted_value = pedersen(value.into(), 5678);
+    let verified = verify(salted_value, proof, root, 0);
+    assert!(!verified, "Should not verify")
+}
+
