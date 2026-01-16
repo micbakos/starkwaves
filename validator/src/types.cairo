@@ -1,4 +1,5 @@
 use core::fmt::Display;
+use starknet::ContractAddress;
 use crate::Felt252Dict;
 
 #[derive(Debug, Drop, Serde, Copy)]
@@ -98,8 +99,42 @@ pub impl ShipKindImpl of ShipKindTrait {
 
 #[derive(Debug, Drop, Serde, Copy)]
 pub enum FireStatus {
-    Miss,
-    Hit: ShipKind,
+    Miss: felt252,
+    Hit: (ShipKind, felt252),
+}
+
+#[derive(Debug, Drop, Serde, Copy)]
+pub struct DefenseReport {
+    pub reveal_boards: bool,
+    pub attacker: ContractAddress,
+    pub defender: ContractAddress,
+    pub x: u8,
+    pub y: u8,
+}
+
+#[generate_trait]
+pub impl FireStatusImpl of FireStatusTrait {
+    fn salted_status(self: @FireStatus) -> felt252 {
+        match self {
+            FireStatus::Miss(status) => *status,
+            FireStatus::Hit((_, status)) => *status,
+        }
+    }
+
+    fn is_hit(self: @FireStatus) -> bool {
+        match self {
+            FireStatus::Hit(_) => true,
+            FireStatus::Miss(_) => false,
+        }
+    }
+}
+
+#[derive(Debug, Drop, Serde, Copy, starknet::Store)]
+pub enum Outcome {
+    #[default]
+    Null, // Both players failed to verify 
+    Fair: ContractAddress,
+    FailedToProvideProof: ContractAddress,
 }
 
 pub fn board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
@@ -136,4 +171,14 @@ pub fn board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
     }
 
     return board_array;
+}
+
+pub fn total_hits(board_size: u8) -> u8 {
+    match board_size {
+        6 | 8 => 5, // Cruiser + Destroyer
+        10 => 17, // Carrier + Battleship + Cruiser + Submarine + Destroyer
+        12 | 14 |
+        20 => 26, // Super Carrier + Carrier + Battleship + Cruiser + 2xSubmarine + 2xDestroyer
+        _ => panic!("Invalid board size"),
+    }
 }

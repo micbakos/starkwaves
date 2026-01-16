@@ -35,7 +35,10 @@ fn compute_merkle_root_recursive(leaves: Span<felt252>) -> felt252 {
             parent_level.append(hash);
             i += 2;
         } else {
-            parent_level.append(*leaves.at(i));
+            // Odd node: duplicate it to create a pair
+            let node = *leaves.at(i);
+            let hash = core::pedersen::pedersen(node, node);
+            parent_level.append(hash);
             i += 1;
         }
     }
@@ -89,11 +92,15 @@ fn generate_proof_recursive(leaves: Span<felt252>, mut index: u32) -> Array<felt
             parent_level.append(hash);
             i += 2;
         } else {
-            // Odd node: carry forward
-            parent_level.append(*leaves.at(i));
+            // Odd node: duplicate it (hash with itself) and add as sibling
+            let node = *leaves.at(i);
             if i == index {
+                // Index is the odd node, add itself as sibling
+                proof.append(node);
                 parent_index = i / 2;
             }
+            let hash = core::pedersen::pedersen(node, node);
+            parent_level.append(hash);
             i += 1;
         }
     }

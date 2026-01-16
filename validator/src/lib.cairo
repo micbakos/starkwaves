@@ -1,10 +1,13 @@
+pub mod events;
+pub mod game;
 pub mod merkle;
+pub mod starkwaves;
+pub mod types;
+
 #[cfg(test)]
 mod tests;
-pub mod types;
-use core::array::ArrayTrait;
 use core::dict::Felt252Dict;
-use merkle::compute_merkle_root;
+use merkle::{compute_merkle_root, verify};
 use types::{Orientation, Ship, ShipKindTrait, board};
 
 pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) -> felt252 {
@@ -19,8 +22,10 @@ pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) ->
     return compute_merkle_root(board, salt);
 }
 
-pub fn verify_report(salted_status: felt252, proof: Array<felt252>, root: felt252) -> bool {
-    verify_pedersen(proof.span(), root, salted_status)
+pub fn verify_report(
+    salted_status: felt252, proof: Array<felt252>, root: felt252, index: usize,
+) -> bool {
+    verify(salted_status, proof, root, index)
 }
 
 fn assert_board_size(board_size: u8) {
