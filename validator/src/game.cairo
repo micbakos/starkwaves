@@ -1,6 +1,6 @@
-use starknet::{ContractAddress, get_caller_address};
+use starknet::ContractAddress;
 use crate::merkle;
-use crate::types::{DefenseReport, FireStatus, FireStatusTrait, Outcome, total_hits};
+use crate::types::{FireStatus, FireStatusTrait, HitReport, OutcomeBeforeReveal, total_hits};
 
 #[derive(Debug, Drop, starknet::Store, Clone)]
 pub struct Game {
@@ -16,7 +16,7 @@ pub struct Game {
     pub player_b_root: Option<felt252>,
     pub attacking_player: Option<ContractAddress>,
     pub turn_index: u32,
-    pub potential_outcome: Option<Outcome>,
+    pub outcome_before_reveal: Option<OutcomeBeforeReveal>,
 }
 
 #[generate_trait]
@@ -47,27 +47,27 @@ pub impl GameImpl of GameTrait {
             player_b_root: None,
             attacking_player: None,
             turn_index: 0,
-            potential_outcome: None,
+            outcome_before_reveal: None,
         }
     }
 
     fn commit_root(ref self: Game, player: ContractAddress, root: felt252) {
-        let is_player_a = self.player_a == player;
-
-        if is_player_a {
+        if self.player_a == player {
             assert!(
                 self.player_a_root.is_none(),
                 "Player {:?} has already committed the board.",
                 player,
             );
             self.player_a_root = Some(root)
-        } else {
+        } else if self.player_b == player {
             assert!(
                 self.player_b_root.is_none(),
                 "Player {:?} has already committed the board.",
                 player,
             );
             self.player_b_root = Some(root)
+        } else {
+            assert!(false, "User {:?} is not part of the game {}", player, self.id);
         }
 
         if self.player_a_root.is_some() && self.player_b_root.is_some() {
@@ -75,46 +75,39 @@ pub impl GameImpl of GameTrait {
         }
     }
 
-    fn register_attack(ref self: Game, x: u8, y: u8) {
+    fn register_attack(ref self: Game, player: ContractAddress, x: u8, y: u8) {
         assert!(
             x < self.board_size && y < self.board_size, "Attack on ({}, {}) is out of bounds", x, y,
         );
-        let player_address = get_caller_address();
 
         if let Some(attacking_player) = self.attacking_player {
-            assert!(
-                attacking_player == player_address,
-                "It is not player's {:?} turn yet.",
-                player_address,
-            );
+            assert!(attacking_player == player, "It is not player's {:?} turn yet.", player);
 
             assert!(
-                self.bomb_offset_in_current_turn(@player_address).is_none(),
+                self.bomb_offset_in_current_turn(@player).is_none(),
                 "Player {:?} cannot attack again in this turn.",
-                player_address,
+                player,
             );
 
-            assert!(!self.is_bombed(@player_address, x, y), "The ({}, {}) is already bombed", x, y);
+            assert!(!self.is_bombed(@player, x, y), "The ({}, {}) is already bombed", x, y);
 
-            self.append_bomb(player_address, x, y);
+            self.append_bomb(player, x, y);
         } else {
-            assert!(false, "Players on game {} have not yet committed their boards.", self.id);
+            assert!(false, "Player {:?} cannot attack in the game {} yet.", player, self.id);
         }
     }
 
-    /// Handles the response of the defender.
-    /// Returns true when the game is over and both players are required to reveal their boards.
-    fn defend(ref self: Game, status: FireStatus, proof: Array<felt252>) -> DefenseReport {
-        let defender_address = get_caller_address();
-
+    fn defend(
+        ref self: Game, player: ContractAddress, status: FireStatus, proof: Array<felt252>,
+    ) -> Option<HitReport> {
         let attacking_player = self.attacking_player.expect('Attacker not attacked yet.');
         assert!(
-            defender_address == self.player_a || defender_address == self.player_b,
+            player == self.player_a || player == self.player_b,
             "Player {:?} does not play in game {}",
-            defender_address,
+            player,
             self.id,
         );
-        assert!(defender_address != attacking_player, "Attacker cannot defend in this round.");
+        assert!(player != attacking_player, "Attacker cannot defend in this round.");
 
         let offset = self
             .bomb_offset_in_current_turn(@attacking_player)
@@ -125,37 +118,40 @@ pub impl GameImpl of GameTrait {
             self.player_a_root
         }
             .expect('Commit root should exist.');
-        let (x, y) = self.offset_to_cartesian(offset);
 
-        let verified = merkle::verify(
-            status.salted_status(), proof, defending_root, offset.try_into().unwrap(),
-        );
+        let verified = merkle::verify(status.salted_status(), proof, defending_root, offset);
 
         if !verified {
-            self.potential_outcome = Some(Outcome::FailedToProvideProof(defender_address));
-            return DefenseReport {
-                reveal_boards: true, attacker: attacking_player, defender: defender_address, x, y,
-            };
+            self.outcome_before_reveal = Some(OutcomeBeforeReveal::FailedToProvideProof(player));
+            return None;
         }
 
-        if status.is_hit() {
+        let mut hit_result = None;
+        if let FireStatus::Hit((kind, _)) = status {
             self.increment_success_hits(attacking_player);
+            let (x, y) = self.offset_to_cartesian(offset);
+            hit_result =
+                Some(
+                    HitReport {
+                        attacker: attacking_player, defender: player, x, y, ship_kind: kind,
+                    },
+                );
+
+            let won = self.check_won(@attacking_player);
+            if won {
+                self.outcome_before_reveal = Some(OutcomeBeforeReveal::Fair(attacking_player));
+            }
         }
 
-        let won = self.check_won(@attacking_player);
-        if won {
-            self.potential_outcome = Some(Outcome::Fair(attacking_player));
-        } else {
-            self.attacking_player = Some(defender_address);
+        if self.outcome_before_reveal.is_none() {
+            self.attacking_player = Some(player);
 
-            if (defender_address == self.player_a) {
+            if (player == self.player_a) {
                 self.turn_index += 1;
             }
         }
 
-        DefenseReport {
-            reveal_boards: won, attacker: attacking_player, defender: defender_address, x, y,
-        }
+        hit_result
     }
 
     fn increment_success_hits(ref self: Game, attacker: ContractAddress) {
@@ -173,6 +169,20 @@ pub impl GameImpl of GameTrait {
         } else {
             total_potential_hits == *self.player_b_hits
         }
+    }
+
+    fn defender(self: @Game) -> Option<ContractAddress> {
+        self
+            .attacking_player
+            .map(
+                |attacker| {
+                    if attacker == *self.player_a {
+                        *self.player_b
+                    } else {
+                        *self.player_a
+                    }
+                },
+            )
     }
 }
 

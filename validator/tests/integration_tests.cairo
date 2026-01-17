@@ -4,7 +4,9 @@ use snforge_std::{
     start_cheat_caller_address,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
-use starkwaves_validator::events::{AttackEvent, GameStartedEvent, PlayerCommittedEvent, TurnEvent};
+use starkwaves_validator::events::{
+    AttackEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent, PlayersAssembledEvent,
+};
 use starkwaves_validator::merkle::{compute_merkle_root, generate_proof};
 use starkwaves_validator::starkwaves::Starkwaves::Event;
 use starkwaves_validator::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
@@ -74,8 +76,10 @@ fn test_integration_start_game_emits_event() {
             @array![
                 (
                     contract_address,
-                    Event::GameStarted(
-                        GameStartedEvent { player_a: player_a(), player_b: player_b(), game_id },
+                    Event::PlayersAssembled(
+                        PlayersAssembledEvent {
+                            player_a: player_a(), player_b: player_b(), game_id,
+                        },
                     ),
                 ),
             ],
@@ -124,36 +128,21 @@ fn test_integration_both_players_commit() {
     let mut spy = spy_events();
     dispatcher.commit_board(root_a, game_id);
 
-    spy
-        .assert_emitted(
-            @array![
-                (
-                    contract_address,
-                    Event::PlayerCommitted(
-                        PlayerCommittedEvent { player: player_a(), root: root_a },
-                    ),
-                ),
-            ],
-        );
-
     // Player B commits
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
 
-    // Should emit both PlayerCommitted and Turn events
     spy
         .assert_emitted(
             @array![
                 (
                     contract_address,
-                    Event::PlayerCommitted(
-                        PlayerCommittedEvent { player: player_b(), root: root_b },
+                    Event::GameStarted(
+                        GameStartedEvent { game_id, attacker: player_a(), defender: player_b() },
                     ),
                 ),
             ],
         );
-
-    spy.assert_emitted(@array![(contract_address, Event::Turn(TurnEvent { player: player_a() }))]);
 }
 
 #[test]
@@ -582,4 +571,288 @@ fn test_integration_invalid_board_size() {
 
     start_cheat_caller_address(contract_address, player_a());
     dispatcher.start_game(player_b(), 7); // Invalid size
+}
+
+// ===============================
+// Tests for Recent Changes
+// ===============================
+
+#[test]
+fn test_players_assembled_event_on_game_creation() {
+    // Test that PlayersAssembledEvent is emitted when game is created
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    let mut spy = spy_events();
+
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    // Should emit PlayersAssembledEvent
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::PlayersAssembled(
+                        PlayersAssembledEvent {
+                            game_id, player_a: player_a(), player_b: player_b(),
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_game_started_event_only_after_both_commits() {
+    // Test that GameStartedEvent is only emitted after BOTH players commit
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    // Player A commits - should NOT emit GameStartedEvent yet
+    let mut spy = spy_events();
+    dispatcher.commit_board(0x111111, game_id);
+
+    // Verify no GameStartedEvent was emitted after first commit
+    // Use a dummy GameStartedEvent to check it was NOT emitted
+    spy
+        .assert_not_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameStarted(
+                        GameStartedEvent { game_id, attacker: player_a(), defender: player_b() },
+                    ),
+                ),
+            ],
+        );
+
+    // Player B commits - NOW should emit GameStartedEvent
+    spy = spy_events();
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.commit_board(0x222222, game_id);
+
+    // Should emit GameStartedEvent with attacker and defender
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameStarted(
+                        GameStartedEvent { game_id, attacker: player_a(), defender: player_b() },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_hit_event_only_on_actual_hits() {
+    // Test that HitEvent is only emitted for hits, not misses
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    // Setup game
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    let ships_b = create_6x6_ships();
+    let board_b = board(ships_b.span(), 6);
+    let salt_b: felt252 = 67890;
+    let root_b = compute_merkle_root(board_b.clone(), salt_b);
+
+    dispatcher.commit_board(0x111111, game_id);
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.commit_board(root_b, game_id);
+
+    // Test 1: Attack a miss position - should NOT emit HitEvent
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.attack(game_id, 5, 5); // Water
+
+    let mut spy = spy_events();
+    let proof = generate_proof(board_b.clone(), salt_b, 35);
+    let salted_status = pedersen(0, salt_b);
+    let status = FireStatus::Miss(salted_status);
+
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.defend(game_id, status, proof);
+
+    // Verify no HitEvent was emitted - use assert_not_emitted with a dummy HitEvent
+    spy
+        .assert_not_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::Hit(
+                        HitEvent {
+                            game_id,
+                            attacker: player_a(),
+                            defender: player_b(),
+                            x: 5,
+                            y: 5,
+                            ship_kind: ShipKind::Destroyer,
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    // Test 2: Player B attacks Player A's board
+    // First we need Player A to have committed a valid root
+    // But Player A committed 0x111111, not a valid merkle root.
+    // Let's restart test with proper setup for hit verification
+}
+
+#[test]
+fn test_hit_event_emitted_on_actual_hit() {
+    // Test that HitEvent IS emitted for actual hits
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    // Setup game with BOTH players having valid board roots
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    let ships_a = create_6x6_ships();
+    let ships_b = create_6x6_ships();
+    let board_a = board(ships_a.span(), 6);
+    let board_b = board(ships_b.span(), 6);
+    let salt_a: felt252 = 12345;
+    let salt_b: felt252 = 67890;
+
+    let root_a = compute_merkle_root(board_a.clone(), salt_a);
+    let root_b = compute_merkle_root(board_b.clone(), salt_b);
+
+    dispatcher.commit_board(root_a, game_id);
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.commit_board(root_b, game_id);
+
+    // Player A attacks (0, 0) - Destroyer position on Player B's board
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.attack(game_id, 0, 0);
+
+    // Player B defends with proof of hit
+    let mut spy = spy_events();
+    let proof = generate_proof(board_b, salt_b, 0);
+    let cell_value = ShipKind::Destroyer.id();
+    let salted_status = pedersen(cell_value.into(), salt_b);
+    let status = FireStatus::Hit((ShipKind::Destroyer, salted_status));
+
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.defend(game_id, status, proof);
+
+    // Should emit HitEvent
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::Hit(
+                        HitEvent {
+                            game_id,
+                            attacker: player_a(),
+                            defender: player_b(),
+                            x: 0,
+                            y: 0,
+                            ship_kind: ShipKind::Destroyer,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+#[should_panic(expected: "is not playing in")]
+fn test_non_player_cannot_commit() {
+    // Test that a player not in the game cannot commit
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    // Player C (not in game) tries to commit
+    start_cheat_caller_address(contract_address, player_c());
+    dispatcher.commit_board(0x333333, game_id); // Should panic
+}
+
+#[test]
+fn test_no_events_emitted_on_single_commit() {
+    // Test that only PlayersAssembled is emitted on game creation,
+    // and no game-start events until both commit
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    // Now commit only one player
+    let mut spy = spy_events();
+    dispatcher.commit_board(0x111111, game_id);
+
+    // Check that GameStartedEvent was NOT emitted using assert_not_emitted
+    spy
+        .assert_not_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameStarted(
+                        GameStartedEvent { game_id, attacker: player_a(), defender: player_b() },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+fn test_game_reveal_request_on_failed_proof() {
+    // Test that GameRevealRequestEvent is emitted when proof verification fails
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+
+    // Setup game
+    start_cheat_caller_address(contract_address, player_a());
+    let game_id = dispatcher.start_game(player_b(), 6);
+
+    let ships_b = create_6x6_ships();
+    let board_b = board(ships_b.span(), 6);
+    let salt_b: felt252 = 67890;
+    let root_b = compute_merkle_root(board_b.clone(), salt_b);
+
+    dispatcher.commit_board(0x111111, game_id);
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.commit_board(root_b, game_id);
+
+    // Player A attacks
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.attack(game_id, 0, 0);
+
+    // Player B provides WRONG proof (empty proof array)
+    let mut spy = spy_events();
+    let wrong_proof = array![];
+    let salted_status = pedersen(ShipKind::Destroyer.id().into(), salt_b);
+    let status = FireStatus::Hit((ShipKind::Destroyer, salted_status));
+
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.defend(game_id, status, wrong_proof);
+
+    // Should emit GameRevealRequestEvent
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameRevealRequest(
+                        GameRevealRequestEvent {
+                            game_id, player_a: player_a(), player_b: player_b(),
+                        },
+                    ),
+                ),
+            ],
+        );
 }

@@ -103,15 +103,6 @@ pub enum FireStatus {
     Hit: (ShipKind, felt252),
 }
 
-#[derive(Debug, Drop, Serde, Copy)]
-pub struct DefenseReport {
-    pub reveal_boards: bool,
-    pub attacker: ContractAddress,
-    pub defender: ContractAddress,
-    pub x: u8,
-    pub y: u8,
-}
-
 #[generate_trait]
 pub impl FireStatusImpl of FireStatusTrait {
     fn salted_status(self: @FireStatus) -> felt252 {
@@ -130,11 +121,19 @@ pub impl FireStatusImpl of FireStatusTrait {
 }
 
 #[derive(Debug, Drop, Serde, Copy, starknet::Store)]
-pub enum Outcome {
+pub enum OutcomeBeforeReveal {
     #[default]
-    Null, // Both players failed to verify 
     Fair: ContractAddress,
     FailedToProvideProof: ContractAddress,
+}
+
+#[derive(Debug, Drop, Serde, Copy)]
+pub struct HitReport {
+    pub attacker: ContractAddress,
+    pub defender: ContractAddress,
+    pub x: u8,
+    pub y: u8,
+    pub ship_kind: ShipKind,
 }
 
 pub fn board(ships: Span<Ship>, board_size: u8) -> Array<u8> {

@@ -44,7 +44,7 @@ pub mod Starkwaves {
     use starknet::{ContractAddress, get_caller_address};
     use crate::events::{
         AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
-        PlayerCommittedEvent, TurnEvent,
+        PlayersAssembledEvent,
     };
     use crate::game::{Game, GameTrait};
     use super::{*, FireStatus};
@@ -59,9 +59,8 @@ pub mod Starkwaves {
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
+        PlayersAssembled: PlayersAssembledEvent,
         GameStarted: GameStartedEvent,
-        PlayerCommitted: PlayerCommittedEvent,
-        Turn: TurnEvent,
         Attack: AttackEvent,
         Hit: HitEvent,
         GameRevealRequest: GameRevealRequestEvent,
@@ -94,7 +93,7 @@ pub mod Starkwaves {
             self.open_games.entry(game_id).write(game);
             self.next_game_id.write(game_id + 1);
 
-            self.emit(GameStartedEvent { player_a, player_b, game_id });
+            self.emit(PlayersAssembledEvent { game_id, player_a, player_b });
 
             game_id
         }
@@ -106,9 +105,14 @@ pub mod Starkwaves {
             game.commit_root(player, root);
             self.open_games.entry(game_id).write(game.clone());
 
-            self.emit(PlayerCommittedEvent { player, root });
             if let Some(attacking_player) = game.attacking_player {
-                self.emit(TurnEvent { player: attacking_player })
+                let defender = game.defender().expect('Defender should exist.');
+                self
+                    .emit(
+                        GameStartedEvent {
+                            game_id: game.id, attacker: attacking_player, defender: defender,
+                        },
+                    )
             }
         }
 
@@ -116,7 +120,7 @@ pub mod Starkwaves {
             let player = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            game.register_attack(x, y);
+            game.register_attack(player, x, y);
 
             self.open_games.entry(game_id).write(game);
             self.emit(AttackEvent { game_id, player, x, y })
@@ -125,33 +129,33 @@ pub mod Starkwaves {
         fn defend(
             ref self: ContractState, game_id: felt252, status: FireStatus, proof: Array<felt252>,
         ) {
-            let _ = self.assert_player_in_game(game_id);
+            let defender = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            let report = game.defend(status, proof);
+            let hit_result = game.defend(defender, status, proof);
             self.open_games.entry(game_id).write(game.clone());
 
-            if let FireStatus::Hit((kind, _)) = status {
+            if let Some(hit) = hit_result {
                 self
                     .emit(
                         HitEvent {
-                            game_id: game_id,
-                            attacker: report.attacker,
-                            defender: report.defender,
-                            x: report.x,
-                            y: report.y,
-                            ship_kind: kind,
+                            game_id,
+                            attacker: hit.attacker,
+                            defender: hit.defender,
+                            x: hit.x,
+                            y: hit.y,
+                            ship_kind: hit.ship_kind,
                         },
                     )
             }
 
-            if report.reveal_boards {
+            if game.outcome_before_reveal.is_some() {
                 self
                     .emit(
                         GameRevealRequestEvent {
                             game_id: game.id, player_a: game.player_a, player_b: game.player_b,
                         },
-                    )
+                    );
             }
         }
     }
