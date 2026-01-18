@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use crate::types::ShipKind;
+use crate::types::{Outcome, ShipKind};
 
 #[derive(Drop, starknet::Event, Serde)]
 pub struct PlayersAssembledEvent {
@@ -52,4 +52,5 @@ pub struct GameOverEvent {
     pub game_id: felt252,
     pub player_a: ContractAddress,
     pub player_b: ContractAddress,
+    pub outcome: Outcome,
 }

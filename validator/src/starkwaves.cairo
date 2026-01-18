@@ -12,27 +12,9 @@ pub trait IStarkwaves<TContractState> {
     fn defend(
         ref self: TContractState, game_id: felt252, status: FireStatus, proof: Array<felt252>,
     );
-    // opponent responds hit or miss with proof => game verifies and updates num of hits per player
-//         * the first one who reaches max hits should win
-//         * game asks both players to reveal their boards.
 
-    // player A => reveals board => game checks legitimacy, if not player automatically loses
-// possible win player B => reveals board => game checks legitimacy, if not player automatically
-// loses possible win
-
-    // when both players are verified then the game decides the winner. Game ends
-
+    fn reveal(ref self: TContractState, game_id: felt252, board: Array<u8>, salt: felt252);
 }
-// Game
-// id
-// board_size
-// status: DOCKING, STARTED, ENDED
-// player_a
-// player_b
-// player_a_board_root
-// player_b_board_root
-// player_a_bombs
-// player_b_bombs
 
 #[starknet::contract]
 pub mod Starkwaves {
@@ -156,6 +138,31 @@ pub mod Starkwaves {
                             game_id: game.id, player_a: game.player_a, player_b: game.player_b,
                         },
                     );
+            }
+        }
+
+        fn reveal(ref self: ContractState, game_id: felt252, board: Array<u8>, salt: felt252) {
+            let player = self.assert_player_in_game(game_id);
+            let mut game = self.open_games.read(game_id);
+
+            let outcome = game.reveal(player, board, salt);
+
+            if let Some(final_outcome) = outcome {
+                self.open_games_per_player.entry(game.player_a).write(0);
+                self.open_games_per_player.entry(game.player_b).write(0);
+                self.open_games.entry(game_id).write(Default::default());
+
+                self
+                    .emit(
+                        GameOverEvent {
+                            game_id: game.id,
+                            player_a: game.player_a,
+                            player_b: game.player_b,
+                            outcome: final_outcome,
+                        },
+                    );
+            } else {
+                self.open_games.entry(game_id).write(game.clone());
             }
         }
     }

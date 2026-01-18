@@ -1,6 +1,9 @@
 use starknet::ContractAddress;
 use crate::merkle;
-use crate::types::{FireStatus, FireStatusTrait, HitReport, OutcomeBeforeReveal, total_hits};
+use crate::types::{
+    FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal, OutcomeBeforeRevealTrait,
+    RevealStatus, total_hits,
+};
 
 #[derive(Debug, Drop, starknet::Store, Clone)]
 pub struct Game {
@@ -17,10 +20,39 @@ pub struct Game {
     pub attacking_player: Option<ContractAddress>,
     pub turn_index: u32,
     pub outcome_before_reveal: Option<OutcomeBeforeReveal>,
+    pub player_a_reveal_status: Option<RevealStatus>,
+    pub player_b_reveal_status: Option<RevealStatus>,
+}
+
+impl GameDefault of Default<Game> {
+    fn default() -> Game {
+        let zero_address: ContractAddress = 0.try_into().unwrap();
+        Game {
+            id: 0,  // id == 0 means game doesn't exist
+            board_size: 0,
+            player_a: zero_address,
+            player_b: zero_address,
+            player_a_bombs: Default::default(),
+            player_b_bombs: Default::default(),
+            player_a_hits: 0,
+            player_b_hits: 0,
+            player_a_root: None,
+            player_b_root: None,
+            attacking_player: None,
+            turn_index: 0,
+            outcome_before_reveal: None,
+            player_a_reveal_status: None,
+            player_b_reveal_status: None,
+        }
+    }
 }
 
 #[generate_trait]
 pub impl GameImpl of GameTrait {
+    fn exists(self: @Game) -> bool {
+        *self.id != 0
+    }
+
     fn new(
         id: felt252, player_a: ContractAddress, player_b: ContractAddress, board_size: u8,
     ) -> Game {
@@ -48,6 +80,8 @@ pub impl GameImpl of GameTrait {
             attacking_player: None,
             turn_index: 0,
             outcome_before_reveal: None,
+            player_a_reveal_status: None,
+            player_b_reveal_status: None,
         }
     }
 
@@ -154,21 +188,57 @@ pub impl GameImpl of GameTrait {
         hit_result
     }
 
-    fn increment_success_hits(ref self: Game, attacker: ContractAddress) {
-        if attacker == self.player_a {
-            self.player_a_hits += 1;
-        } else {
-            self.player_b_hits += 1;
-        }
-    }
+    fn reveal(
+        ref self: Game, player: ContractAddress, board: Array<u8>, salt: felt252,
+    ) -> Option<Outcome> {
+        assert!(self.outcome_before_reveal.is_some(), "The game is not finished yet.");
 
-    fn check_won(self: @Game, attacker: @ContractAddress) -> bool {
-        let total_potential_hits = total_hits(*self.board_size);
-        if attacker == self.player_a {
-            total_potential_hits == *self.player_a_hits
+        let game_board_size: u32 = self.board_size.into();
+        assert!(
+            board.len() == game_board_size * game_board_size,
+            "The board revealed should be of size {}x{}",
+            game_board_size,
+            game_board_size,
+        );
+
+        if player == self.player_a {
+            assert!(
+                self.player_a_reveal_status.is_none(),
+                "Player {:?} has already revealed their board.",
+                player,
+            );
         } else {
-            total_potential_hits == *self.player_b_hits
+            assert!(
+                self.player_b_reveal_status.is_none(),
+                "Player {:?} has already revealed their board.",
+                player,
+            );
         }
+
+        let revealed_root = merkle::compute_merkle_root(board, salt);
+
+        if player == self.player_a {
+            let committed = self.player_a_root.expect('Root should have been committed');
+            if committed == revealed_root {
+                self.player_a_reveal_status = Some(RevealStatus::Real);
+            } else {
+                self.player_a_reveal_status = Some(RevealStatus::Fake);
+            }
+        } else {
+            let committed = self.player_b_root.expect('Root should have been committed');
+            if committed == revealed_root {
+                self.player_b_reveal_status = Some(RevealStatus::Real);
+            } else {
+                self.player_b_reveal_status = Some(RevealStatus::Fake);
+            }
+        }
+
+        if self.player_a_reveal_status.is_none() || self.player_b_reveal_status.is_none() {
+            // Still waiting for the other player
+            return None;
+        }
+
+        Some(self.compute_final_outcome())
     }
 
     fn defender(self: @Game) -> Option<ContractAddress> {
@@ -183,6 +253,63 @@ pub impl GameImpl of GameTrait {
                     }
                 },
             )
+    }
+}
+
+#[generate_trait]
+impl InternalGameImpl of InternalGameTrait {
+    fn check_won(self: @Game, attacker: @ContractAddress) -> bool {
+        let total_potential_hits = total_hits(*self.board_size);
+        if attacker == self.player_a {
+            total_potential_hits == *self.player_a_hits
+        } else {
+            total_potential_hits == *self.player_b_hits
+        }
+    }
+
+    /// Computes the final outcome after both players have revealed their boards.
+    fn compute_final_outcome(self: @Game) -> Outcome {
+        let outcome_before = (*self.outcome_before_reveal).expect('Outcome before reveal missing');
+        let status_a = (*self.player_a_reveal_status).expect('Player A reveal status missing');
+        let status_b = (*self.player_b_reveal_status).expect('Player B reveal status missing');
+
+        let a_honest_before = match outcome_before {
+            OutcomeBeforeReveal::Fair(_) => true,
+            OutcomeBeforeReveal::FailedToProvideProof(cheater) => cheater != *self.player_a,
+        };
+        let b_honest_before = match outcome_before {
+            OutcomeBeforeReveal::Fair(_) => true,
+            OutcomeBeforeReveal::FailedToProvideProof(cheater) => cheater != *self.player_b,
+        };
+
+        let a_honest_after = status_a == RevealStatus::Real;
+        let b_honest_after = status_b == RevealStatus::Real;
+
+        let a_fully_honest = a_honest_before && a_honest_after;
+        let b_fully_honest = b_honest_before && b_honest_after;
+
+        if a_fully_honest && b_fully_honest {
+            outcome_before.to_outcome()
+        } else if a_fully_honest && !b_fully_honest {
+            // Player A was honest, Player B cheated at some point
+            // Player A wins by opponent's dishonesty
+            Outcome::FailedToProvideProof(*self.player_b)
+        } else if !a_fully_honest && b_fully_honest {
+            // Player B was honest, Player A cheated at some point
+            // Player B wins by opponent's dishonesty
+            Outcome::FailedToProvideProof(*self.player_a)
+        } else {
+            // Both players cheated at some point - no winner
+            Outcome::Null
+        }
+    }
+
+    fn increment_success_hits(ref self: Game, attacker: ContractAddress) {
+        if attacker == self.player_a {
+            self.player_a_hits += 1;
+        } else {
+            self.player_b_hits += 1;
+        }
     }
 }
 
