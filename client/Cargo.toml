@@ -21,5 +21,5 @@ cairo-build = []
 
 [[test]]
 name = "cairo_compatibility"
-path = "tests/rs_cairo_commitment.rs"
+path = "tests/cairo_board_verifier.rs"
 required-features = ["cairo-build"]

@@ -4,15 +4,14 @@ use snforge_std::{
     start_cheat_caller_address,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
-use starkwaves_validator::events::{
+use starkwaves::events::{
     AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
     PlayersAssembledEvent,
 };
-use starkwaves_validator::types::Outcome;
-use starkwaves_validator::merkle::{compute_merkle_root, generate_proof};
-use starkwaves_validator::starkwaves::Starkwaves::Event;
-use starkwaves_validator::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
-use starkwaves_validator::types::{FireStatus, Orientation, Ship, ShipKind, ShipKindTrait, board};
+use starkwaves::merkle::{compute_merkle_root, generate_proof};
+use starkwaves::starkwaves::Starkwaves::Event;
+use starkwaves::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
+use starkwaves::types::{FireStatus, Orientation, Outcome, Ship, ShipKind, ShipKindTrait, board};
 
 // Test helper functions
 fn player_a() -> ContractAddress {
@@ -702,11 +701,10 @@ fn test_hit_event_only_on_actual_hits() {
                 ),
             ],
         );
-
     // Test 2: Player B attacks Player A's board
-    // First we need Player A to have committed a valid root
-    // But Player A committed 0x111111, not a valid merkle root.
-    // Let's restart test with proper setup for hit verification
+// First we need Player A to have committed a valid root
+// But Player A committed 0x111111, not a valid merkle root.
+// Let's restart test with proper setup for hit verification
 }
 
 #[test]
@@ -939,7 +937,7 @@ fn play_complete_game_player_a_wins(
         dispatcher.defend(game_id, miss_status, proof_a);
 
         i += 1;
-    };
+    }
 
     (game_id, board_a, board_b, salt_a, salt_b)
 }

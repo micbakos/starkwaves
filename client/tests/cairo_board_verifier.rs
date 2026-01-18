@@ -1,9 +1,9 @@
-use crate::cairo::cairo_runner::CairoRunner;
-use crate::cairo::panic_result::CairoError;
 use cairo_native::Value;
 use starknet::core::types::Felt;
 use starkwaves_client::types::Board;
 use std::path::Path;
+use crate::cairo::cairo_runner::CairoRunner;
+use crate::cairo::panic_result::CairoError;
 
 pub struct CairoBoardVerifier {
     runner: CairoRunner,
@@ -11,7 +11,7 @@ pub struct CairoBoardVerifier {
 
 impl CairoBoardVerifier {
     pub fn new() -> CairoBoardVerifier {
-        let sierra_path = env!("VALIDATOR_SIERRA_PATH");
+        let sierra_path = env!("CONTRACT_SIERRA_PATH");
         let runner = CairoRunner::new(Path::new(sierra_path));
         CairoBoardVerifier { runner }
     }
@@ -25,7 +25,7 @@ impl CairoBoardVerifier {
     ) -> bool {
         self.runner
             .execute_cairo_fn(
-                "starkwaves_validator::merkle::verify",
+                "starkwaves::merkle::verify",
                 vec![
                     Value::Felt252(salted_status),
                     Value::Array(proof.iter().map(|p| Value::Felt252(*p)).collect()),
@@ -33,7 +33,7 @@ impl CairoBoardVerifier {
                     Value::Uint32(index as u32),
                 ],
             )
-            .and_then(|value| {
+            .and_then(|value: Value| {
                 if let Value::Enum {
                     tag, debug_name, ..
                 } = value.clone()

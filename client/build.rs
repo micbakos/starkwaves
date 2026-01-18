@@ -3,17 +3,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../validator/target/dev");
-    println!("cargo:rerun-if-changed=../validator/target/release");
-    println!("cargo:rerun-if-changed=../validator/src");
-    println!("cargo:rerun-if-changed=../validator/Scarb.toml");
+    println!("cargo:rerun-if-changed=../contract/target/dev");
+    println!("cargo:rerun-if-changed=../contract/target/release");
+    println!("cargo:rerun-if-changed=../contract/src");
+    println!("cargo:rerun-if-changed=../contract/Scarb.toml");
 
-    let sierra_file = build_validator(false);
-    println!("cargo:rustc-env=VALIDATOR_SIERRA_PATH={}", sierra_file.display());
+    let sierra_file = build_contract(false);
+    println!("cargo:rustc-env=CONTRACT_SIERRA_PATH={}", sierra_file.display());
 }
 
-fn build_validator(release: bool) -> PathBuf {
-    let validator_dir = Path::new("../validator");
+fn build_contract(release: bool) -> PathBuf {
+    let validator_dir = Path::new("../contract");
 
     // Check if scarb is available
     let scarb_check = Command::new("scarb")
