@@ -28,7 +28,7 @@ impl GameDefault of Default<Game> {
     fn default() -> Game {
         let zero_address: ContractAddress = 0.try_into().unwrap();
         Game {
-            id: 0,  // id == 0 means game doesn't exist
+            id: 0, // id == 0 means game doesn't exist
             board_size: 0,
             player_a: zero_address,
             player_b: zero_address,

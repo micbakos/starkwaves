@@ -8,8 +8,11 @@ fn main() {
     println!("cargo:rerun-if-changed=../contract/src");
     println!("cargo:rerun-if-changed=../contract/Scarb.toml");
 
-    let sierra_file = build_contract(false);
-    println!("cargo:rustc-env=CONTRACT_SIERRA_PATH={}", sierra_file.display());
+    #[cfg(feature = "cairo-build")]
+    {
+        let sierra_file = build_contract(false);
+        println!("cargo:rustc-env=CONTRACT_SIERRA_PATH={}", sierra_file.display());
+    }
 }
 
 fn build_contract(release: bool) -> PathBuf {

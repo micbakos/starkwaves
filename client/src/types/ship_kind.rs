@@ -2,6 +2,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use crate::types::board_size::BoardSize;
+use crate::types::error::GameError;
 
 /// Represents different types of ships in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
@@ -89,6 +90,25 @@ impl ShipKind {
             }
         } else {
             false
+        }
+    }
+}
+
+impl TryFrom<&str> for ShipKind {
+    type Error = GameError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "SC" => Ok(ShipKind::SuperCarrier),
+            "CA" => Ok(ShipKind::Carrier),
+            "BA" => Ok(ShipKind::Battleship),
+            "CR" => Ok(ShipKind::Cruiser),
+            "SU" => Ok(ShipKind::Submarine),
+            "DE" => Ok(ShipKind::Destroyer),
+            _ => Err(GameError::InvalidInput {
+                expected: "SC|CA|BA|CR|SU|DE".to_string(),
+                received: value.to_string(),
+            }),
         }
     }
 }

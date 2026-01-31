@@ -6,10 +6,11 @@ edition = "2024_07"
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
 [dependencies]
+openzeppelin_access = "3.0.0"
 starknet = "2.14.0"
 
 [dev-dependencies]
-snforge_std = "0.53.0"
+snforge_std = "0.51.2"
 assert_macros = "2.14.0"
 
 # Removed starknet-contract target - building as library
@@ -19,6 +20,10 @@ test = "snforge test"
 
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
 
 # Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information
 

@@ -1,6 +1,12 @@
+use starknet::accounts::AccountError;
+use starknet::core::types::{ContractExecutionError, StarknetError};
+use starknet::providers::ProviderError;
+use starknet_tokio_tungstenite::{SubscribeError, SubscriptionReceiveError};
 use crate::types::board_size::BoardSize;
 use crate::types::{Orientation, ShipKind};
 use thiserror::Error as ThisError;
+
+pub use starknet::core::codec::Error as CodecError;
 
 #[derive(Clone, Debug, Eq, ThisError, PartialEq)]
 pub enum GameError {
@@ -37,4 +43,111 @@ pub enum GameError {
 
     #[error("Game is over")]
     GameOver,
+
+    #[error("Cannot create a new game. Player is in another game.")]
+    PlayerInGame,
+
+    #[error("You have hit the rate limit.")]
+    RateLimited,
+
+    #[error("{error}")]
+    ProviderError {
+        error: String
+    },
+
+    #[error("It is not your turn to attack.")]
+    CannotAttack,
+
+    #[error("Invalid input. Expected {expected} but received {received}.")]
+    InvalidInput {
+        expected: String,
+        received: String
+    }
+}
+
+impl Into<GameError> for ProviderError {
+    fn into(self) -> GameError {
+        match self {
+            ProviderError::StarknetError(inner) => {
+                inner.into()
+            }
+            ProviderError::RateLimited => GameError::RateLimited,
+            ProviderError::ArrayLengthMismatch => GameError::ProviderError {
+                error: self.to_string()
+            },
+            ProviderError::Other(internal) => {
+                GameError::ProviderError {
+                    error: internal.to_string()
+                }
+            }
+        }
+    }
+}
+
+impl Into<GameError> for StarknetError {
+    fn into(self) -> GameError {
+        match self {
+            StarknetError::ContractError(error_data) => {
+                error_data.revert_error.into()
+            },
+            StarknetError::TransactionExecutionError(error_data) => {
+                error_data.execution_error.into()
+            },
+            _ => GameError::ProviderError { error: self.to_string() },
+        }
+    }
+}
+
+impl Into<GameError> for ContractExecutionError {
+    fn into(self) -> GameError {
+        match self {
+            ContractExecutionError::Nested(nested_error) => {
+                nested_error.error.as_ref().clone().into()
+            }
+            ContractExecutionError::Message(message) => {
+                match message.as_str() {
+                    s if s.contains("is already in another game.") => GameError::PlayerInGame,
+                    _ => GameError::ProviderError { error: message },
+                }
+            }
+        }
+    }
+}
+
+impl<S> Into<GameError> for AccountError<S>
+where
+    S: std::fmt::Debug,
+{
+    fn into(self) -> GameError {
+        match self {
+            AccountError::Signing(error) => {
+                GameError::ProviderError { error: format!("{:?}", error) }
+            }
+            AccountError::Provider(error) => error.into(),
+            AccountError::ClassHashCalculation(error) => {
+                GameError::ProviderError { error: error.to_string() }
+            }
+            AccountError::FeeOutOfRange => {
+                GameError::ProviderError { error: "Fee out of range".to_string() }
+            }
+        }
+    }
+}
+
+impl Into<GameError> for SubscribeError {
+    fn into(self) -> GameError {
+        GameError::ProviderError { error: format!("{:?}", self) }
+    }
+}
+
+impl Into<GameError> for SubscriptionReceiveError {
+    fn into(self) -> GameError {
+        GameError::ProviderError { error: format!("{:?}", self) }
+    }
+}
+
+impl Into<GameError> for CodecError {
+    fn into(self) -> GameError {
+        GameError::ProviderError { error: format!("{:?}", self) }
+    }
 }

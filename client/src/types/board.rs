@@ -175,6 +175,42 @@ impl Board {
         Ok(report)
     }
 
+    pub fn size(&self) -> BoardSize {
+        self.size
+    }
+
+    pub fn is_board_ready(&self) -> bool {
+        let mut kinds_placed = HashMap::<ShipKind, u8>::new();
+
+        self.ships.iter().for_each(|ship| {
+            let occurrences = kinds_placed.get(&ship.kind).unwrap_or(&0);
+            kinds_placed.insert(ship.kind, occurrences + 1);
+        });
+
+        ShipKind::all().iter().all(|kind| {
+            let occurrences = kinds_placed.get(&kind).unwrap_or(&0u8);
+            kind.is_eligible(self.size, *occurrences)
+        })
+    }
+
+    pub fn to_array(&self) -> Result<Vec<u8>> {
+        if !self.is_board_ready() {
+            Err(BoardNotReady)?;
+        }
+
+        let mut ids = Vec::<u8>::new();
+        for cell in self.cells() {
+            let id = cell
+                .ship(&self.ships)
+                .map(|ship| ship.kind.id())
+                .unwrap_or(0);
+
+            ids.push(id);
+        }
+
+        Ok(ids)
+    }
+
     fn cells(&self) -> Vec<Cell> {
         let board_size = self.size.size();
         let mut cells = Vec::with_capacity((board_size * board_size) as usize);
@@ -199,24 +235,6 @@ impl Board {
         cells
     }
 
-    fn to_array(&self) -> Result<Vec<u8>> {
-        if !self.is_board_ready() {
-            Err(BoardNotReady)?;
-        }
-
-        let mut ids = Vec::<u8>::new();
-        for cell in self.cells() {
-            let id = cell
-                .ship(&self.ships)
-                .map(|ship| ship.kind.id())
-                .unwrap_or(0);
-
-            ids.push(id);
-        }
-
-        Ok(ids)
-    }
-
     fn hit_ships(&mut self) -> HashMap<Uuid, u8> {
         let mut hits = HashMap::<Uuid, u8>::new();
         let cells = self.cells();
@@ -236,20 +254,6 @@ impl Board {
         let size = self.size.size();
         let rows_offset = x * size;
         (rows_offset + y) as usize
-    }
-
-    fn is_board_ready(&self) -> bool {
-        let mut kinds_placed = HashMap::<ShipKind, u8>::new();
-
-        self.ships.iter().for_each(|ship| {
-            let occurrences = kinds_placed.get(&ship.kind).unwrap_or(&0);
-            kinds_placed.insert(ship.kind, occurrences + 1);
-        });
-
-        ShipKind::all().iter().all(|kind| {
-            let occurrences = kinds_placed.get(&kind).unwrap_or(&0u8);
-            kind.is_eligible(self.size, *occurrences)
-        })
     }
 }
 

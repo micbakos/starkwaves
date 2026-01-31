@@ -7,6 +7,9 @@ pub mod board_size;
 pub mod result;
 pub mod error;
 pub mod fire_report;
+pub mod environment;
+pub mod contract;
+pub mod game_state;
 
 pub use board::Board;
 pub use cell::Cell;

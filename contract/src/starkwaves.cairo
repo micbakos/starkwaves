@@ -14,10 +14,15 @@ pub trait IStarkwaves<TContractState> {
     );
 
     fn reveal(ref self: TContractState, game_id: felt252, board: Array<u8>, salt: felt252);
+
+    fn reset(ref self: TContractState);
+
+    fn get_next_game_id(self: @TContractState) -> felt252;
 }
 
 #[starknet::contract]
 pub mod Starkwaves {
+    use openzeppelin_access::ownable::OwnableComponent;
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -31,11 +36,19 @@ pub mod Starkwaves {
     use crate::game::{Game, GameTrait};
     use super::{*, FireStatus};
 
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
+
     #[storage]
     struct Storage {
         next_game_id: felt252,
         open_games: Map<felt252, Game>,
         open_games_per_player: Map<ContractAddress, felt252>,
+        // Storage for other components
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage,
     }
 
     #[event]
@@ -47,10 +60,14 @@ pub mod Starkwaves {
         Hit: HitEvent,
         GameRevealRequest: GameRevealRequestEvent,
         GameOver: GameOverEvent,
+        // Events from other components
+        #[flat]
+        OwnableEvent: OwnableComponent::Event,
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState) {
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        self.ownable.initializer(owner);
         self.next_game_id.write(1);
     }
 
@@ -164,6 +181,33 @@ pub mod Starkwaves {
             } else {
                 self.open_games.entry(game_id).write(game.clone());
             }
+        }
+
+        fn reset(ref self: ContractState) {
+            self.ownable.assert_only_owner();
+
+            let next_game_id = self.next_game_id.read();
+            if next_game_id == 0 {
+                return;
+            }
+
+            let mut game_id = next_game_id - 1;
+            while game_id != 0 {
+                let game = self.open_games.read(game_id);
+
+                self.open_games_per_player.entry(game.player_a).write(0);
+                self.open_games_per_player.entry(game.player_b).write(0);
+
+                self.open_games.entry(game_id).write(Default::default());
+
+                game_id -= 1;
+            }
+
+            self.next_game_id.write(1);
+        }
+
+        fn get_next_game_id(self: @ContractState) -> felt252 {
+            self.next_game_id.read()
         }
     }
 
