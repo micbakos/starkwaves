@@ -6,7 +6,6 @@ use starknet::providers::jsonrpc::HttpTransport;
 use starknet::providers::JsonRpcClient;
 use starknet::signers::{LocalWallet, SigningKey};
 use std::env;
-use log::debug;
 use url::Url;
 
 #[derive(Debug)]
@@ -40,7 +39,7 @@ impl Environment {
 
         let player_b_address =
             env::var("PLAYER_B_ADDR").expect("Should have PLAYER_B_ADDR in .env");
-        
+
         Self {
             rpc_url: Url::parse(rpc_url_str.as_str()).expect("Invalid RPC_URL"),
             ws_url: Url::parse(ws_url_str.as_str()).expect("Invalid WS_URL"),

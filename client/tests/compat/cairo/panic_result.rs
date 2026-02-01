@@ -1,4 +1,4 @@
-use crate::cairo::cairo_value::CairoValue;
+use crate::compat::cairo::cairo_value::CairoValue;
 use cairo_native::Value;
 use std::fmt::{Display, Formatter};
 

@@ -1,7 +1,7 @@
 use core::pedersen::pedersen;
+use merkle::{generate_proof, verify};
 use starkwaves::types::{Orientation, Ship, ShipKind};
 use starkwaves::validate_and_commit;
-use crate::merkle::{generate_proof, verify};
 use crate::{board, compute_merkle_root};
 
 // ===============================

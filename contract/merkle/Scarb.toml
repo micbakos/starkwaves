@@ -1,0 +1,10 @@
+[package]
+name = "merkle"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.14.0"
+
+[[target.lib]]
+sierra = true

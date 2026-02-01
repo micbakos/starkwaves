@@ -1,11 +1,10 @@
 pub mod events;
 pub mod game;
-pub mod merkle;
 pub mod starkwaves;
-pub mod types;
 
 #[cfg(test)]
 mod tests;
+pub mod types;
 use core::dict::Felt252Dict;
 use merkle::{compute_merkle_root, verify};
 use types::{Orientation, Ship, ShipKindTrait, board};

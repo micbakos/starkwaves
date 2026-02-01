@@ -7,6 +7,7 @@ use crate::types::fire_report::FireReport;
 use crate::types::game_state::GameState;
 use crate::types::result::Result;
 use crate::types::{Board, Ship};
+use log::info;
 use starknet::accounts::Account;
 use starknet::core::types::{ConfirmedBlockId, L2TransactionFinalityStatus, TransactionReceipt};
 use starknet::{
@@ -20,7 +21,6 @@ use starknet::{
 use starknet_tokio_tungstenite::{EventSubscriptionOptions, EventsUpdate, TungsteniteStream};
 use std::sync::Arc;
 use std::time::Duration;
-use log::info;
 use tokio::sync::Mutex;
 use url::Url;
 

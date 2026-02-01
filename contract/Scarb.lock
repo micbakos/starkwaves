@@ -2,6 +2,10 @@
 version = 1
 
 [[package]]
+name = "merkle"
+version = "0.1.0"
+
+[[package]]
 name = "openzeppelin_access"
 version = "3.0.0"
 source = "registry+https://scarbs.xyz/"
@@ -45,6 +49,7 @@ dependencies = [
 name = "starkwaves"
 version = "0.1.0"
 dependencies = [
+ "merkle",
  "openzeppelin_access",
  "snforge_std",
 ]

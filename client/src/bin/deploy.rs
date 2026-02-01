@@ -1,13 +1,11 @@
 #[path = "common.rs"]
 mod common;
 
+use starknet::core::types::Felt;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
 use std::process::{exit, Command, Stdio};
 use std::str::FromStr;
-use log::info;
-use starknet::core::types::Felt;
 
 use common::{check_sncast, Config, CONTRACT_PATH};
 

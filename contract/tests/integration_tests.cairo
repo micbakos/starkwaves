@@ -1,4 +1,5 @@
 use core::pedersen::pedersen;
+use merkle::{compute_merkle_root, generate_proof};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_caller_address,
@@ -8,7 +9,6 @@ use starkwaves::events::{
     AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
     PlayersAssembledEvent,
 };
-use starkwaves::merkle::{compute_merkle_root, generate_proof};
 use starkwaves::starkwaves::Starkwaves::Event;
 use starkwaves::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
 use starkwaves::types::{FireStatus, Orientation, Outcome, Ship, ShipKind, ShipKindTrait, board};

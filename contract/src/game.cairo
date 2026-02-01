@@ -1,5 +1,4 @@
 use starknet::ContractAddress;
-use crate::merkle;
 use crate::types::{
     FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal, OutcomeBeforeRevealTrait,
     RevealStatus, total_hits,

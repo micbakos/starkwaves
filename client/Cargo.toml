@@ -29,7 +29,7 @@ cairo-native = "0.8.0"
 cairo-lang-sierra = "2.14.0"
 
 [features]
-cairo-build = []
+merkle-build = []
 
 [[bin]]
 name = "deploy"
@@ -40,6 +40,7 @@ name = "reset"
 path = "src/bin/reset.rs"
 
 [[test]]
-name = "cairo_compatibility"
-path = "tests/cairo_board_verifier.rs"
-required-features = ["cairo-build"]
+name = "cairo_rs_compat"
+path = "tests/cairo_rs_compat.rs"
+required-features = ["merkle-build"]
+

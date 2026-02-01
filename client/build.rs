@@ -3,20 +3,20 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../contract/target/dev");
-    println!("cargo:rerun-if-changed=../contract/target/release");
-    println!("cargo:rerun-if-changed=../contract/src");
-    println!("cargo:rerun-if-changed=../contract/Scarb.toml");
-
-    #[cfg(feature = "cairo-build")]
+    #[cfg(feature = "merkle-build")]
     {
-        let sierra_file = build_contract(false);
-        println!("cargo:rustc-env=CONTRACT_SIERRA_PATH={}", sierra_file.display());
+        println!("cargo:rerun-if-changed=../contract/merkle/Scarb.toml");
+        println!("cargo:rerun-if-changed=../contract/merkle/src");
+        println!("cargo:rerun-if-changed=../contract/merkle/target");
+
+        let sierra_file = build_merkle(false);
+        println!("cargo:rustc-env=MERKLE_SIERRA_PATH={}", sierra_file.display());
     }
 }
 
-fn build_contract(release: bool) -> PathBuf {
-    let validator_dir = Path::new("../contract");
+#[cfg(feature = "merkle-build")]
+fn build_merkle(release: bool) -> PathBuf {
+    let merkle_dir = Path::new("../contract/merkle");
 
     // Check if scarb is available
     let scarb_check = Command::new("scarb")
@@ -38,7 +38,7 @@ fn build_contract(release: bool) -> PathBuf {
 
     // Run scarb
     let output = Command::new("scarb")
-        .current_dir(validator_dir)
+        .current_dir(merkle_dir)
         .args(scarb_args)
         .output()
         .expect("Failed to execute scarb build");
@@ -49,9 +49,9 @@ fn build_contract(release: bool) -> PathBuf {
     }
 
     let target_dir = if release {
-        validator_dir.join("target/release")
+        merkle_dir.join("target/release")
     } else {
-        validator_dir.join("target/dev")
+        merkle_dir.join("target/dev")
     };
 
     // Find sierra program file
@@ -59,6 +59,7 @@ fn build_contract(release: bool) -> PathBuf {
         .expect("Could not find Sierra output file. Check Scarb build output.")
 }
 
+#[cfg(feature = "merkle-build")]
 fn find_sierra_file(dir: &Path) -> Option<PathBuf> {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -68,7 +69,7 @@ fn find_sierra_file(dir: &Path) -> Option<PathBuf> {
                     // Look for the .sierra.json output (library, not contract)
                     if name.ends_with(".sierra.json")
                         && !name.contains("contract_class")
-                        && !name.contains("test")
+                        && !name.contains("tests")
                         && !name.contains("unittest") {
                         return Some(path)
                     }

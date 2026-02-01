@@ -1,11 +1,11 @@
 use std::path::Path;
-use crate::cairo::panic_result::{CairoError, CairoResult};
+use crate::compat::cairo::panic_result::{CairoError, CairoResult};
 use cairo_lang_sierra::program::Program;
 use cairo_native::context::NativeContext;
 use cairo_native::executor::JitNativeExecutor;
 use cairo_native::utils::find_function_id;
 use cairo_native::Value;
-use crate::cairo::cairo_value::CairoValue;
+use crate::compat::cairo::cairo_value::CairoValue;
 
 pub struct CairoRunner {
     executor: JitNativeExecutor<'static>,

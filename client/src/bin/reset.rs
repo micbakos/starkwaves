@@ -1,11 +1,11 @@
 #[path = "common.rs"]
 mod common;
 
+use common::{check_sncast, Config, CONTRACT_PATH};
+use log::{error, info};
 use std::env;
 use std::io::{BufRead, BufReader};
 use std::process::{exit, Command, Stdio};
-use log::{error, info};
-use common::{check_sncast, Config, CONTRACT_PATH};
 
 fn reset_game(config: &Config, game_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     let contract_address = config.contract_address()?;
