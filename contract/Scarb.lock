@@ -2,6 +2,11 @@
 version = 1
 
 [[package]]
+name = "alexandria_data_structures"
+version = "0.8.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.8.0#cb290c4d3884aca23d450950e7f302ceebc98d16"
+
+[[package]]
 name = "merkle"
 version = "0.1.0"
 
@@ -49,6 +54,7 @@ dependencies = [
 name = "starkwaves"
 version = "0.1.0"
 dependencies = [
+ "alexandria_data_structures",
  "merkle",
  "openzeppelin_access",
  "snforge_std",

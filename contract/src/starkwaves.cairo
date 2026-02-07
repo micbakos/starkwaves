@@ -1,9 +1,8 @@
-use starknet::ContractAddress;
-use crate::types::FireStatus;
+use crate::types::{BoardSize, FireStatus};
 
 #[starknet::interface]
 pub trait IStarkwaves<TContractState> {
-    fn start_game(ref self: TContractState, opponent: ContractAddress, board_size: u8) -> felt252;
+    fn request_start_game(ref self: TContractState, board_size: BoardSize) -> Option<felt252>;
 
     fn commit_board(ref self: TContractState, root: felt252, game_id: felt252);
 
@@ -22,6 +21,7 @@ pub trait IStarkwaves<TContractState> {
 
 #[starknet::contract]
 pub mod Starkwaves {
+    use core::num::traits::Zero;
     use openzeppelin_access::ownable::OwnableComponent;
     use starknet::event::EventEmitter;
     use starknet::storage::{
@@ -31,10 +31,11 @@ pub mod Starkwaves {
     use starknet::{ContractAddress, get_caller_address};
     use crate::events::{
         AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
-        PlayersAssembledEvent,
+        PlayerEnteredLobbyEvent, PlayersAssembledEvent,
     };
     use crate::game::{Game, GameTrait};
-    use super::{*, FireStatus};
+    use crate::types::{AllBoardSizesTrait, BoardSizeTrait};
+    use super::{*, BoardSize, FireStatus};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     #[abi(embed_v0)]
@@ -43,6 +44,7 @@ pub mod Starkwaves {
 
     #[storage]
     struct Storage {
+        open_lobbies: Map<u8, ContractAddress>,
         next_game_id: felt252,
         open_games: Map<felt252, Game>,
         open_games_per_player: Map<ContractAddress, felt252>,
@@ -54,6 +56,7 @@ pub mod Starkwaves {
     #[event]
     #[derive(Drop, starknet::Event)]
     pub enum Event {
+        PlayerEntererLobby: PlayerEnteredLobbyEvent,
         PlayersAssembled: PlayersAssembledEvent,
         GameStarted: GameStartedEvent,
         Attack: AttackEvent,
@@ -73,28 +76,33 @@ pub mod Starkwaves {
 
     #[abi(embed_v0)]
     impl StarkwavesImpl of super::IStarkwaves<ContractState> {
-        fn start_game(
-            ref self: ContractState, opponent: ContractAddress, board_size: u8,
-        ) -> felt252 {
-            let player_a = get_caller_address();
-            let player_b = opponent;
+        fn request_start_game(ref self: ContractState, board_size: BoardSize) -> Option<felt252> {
+            let player = get_caller_address();
 
-            let game_id = self.open_games_per_player.entry(player_a).read();
-            assert!(game_id == 0, "Player {:?} is already in another game.", player_a);
-            let game_id = self.open_games_per_player.entry(player_b).read();
-            assert!(game_id == 0, "Player {:?} is already in another game.", player_b);
+            let game_id = self.open_games_per_player.entry(player).read();
+            assert!(game_id == 0, "Player {:?} is already in another game.", player);
 
-            let game_id = self.next_game_id.read();
-            let game = GameTrait::new(game_id, player_a, player_b, board_size);
+            let all_board_sizes = AllBoardSizesTrait::all();
+            for board_size in all_board_sizes {
+                let size = board_size.size();
+                let a_player = self.open_lobbies.entry(size).read();
+                assert!(a_player != player, "Cannot enter another lobby.")
+            }
 
-            self.open_games_per_player.entry(player_a).write(game_id);
-            self.open_games_per_player.entry(player_b).write(game_id);
-            self.open_games.entry(game_id).write(game);
-            self.next_game_id.write(game_id + 1);
+            let size = board_size.size();
+            let opponent = self.open_lobbies.entry(size).read();
+            if opponent.is_zero() {
+                // Enter lobby
+                self.open_lobbies.entry(size).write(player);
+                self.emit(PlayerEnteredLobbyEvent { lobby: board_size, player: player });
 
-            self.emit(PlayersAssembledEvent { game_id, player_a, player_b });
+                None
+            } else {
+                self.open_lobbies.entry(size).write(Zero::zero());
+                let game_id = self.start_game(opponent, board_size);
 
-            game_id
+                Some(game_id)
+            }
         }
 
         fn commit_board(ref self: ContractState, root: felt252, game_id: felt252) {
@@ -213,6 +221,25 @@ pub mod Starkwaves {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
+        fn start_game(
+            ref self: ContractState, opponent: ContractAddress, board_size: BoardSize,
+        ) -> felt252 {
+            let player_a = get_caller_address();
+            let player_b = opponent;
+
+            let game_id = self.next_game_id.read();
+            let game = GameTrait::new(game_id, player_a, player_b, board_size);
+
+            self.open_games_per_player.entry(player_a).write(game_id);
+            self.open_games_per_player.entry(player_b).write(game_id);
+            self.open_games.entry(game_id).write(game);
+            self.next_game_id.write(game_id + 1);
+
+            self.emit(PlayersAssembledEvent { game_id, player_a, player_b });
+
+            game_id
+        }
+
         fn assert_player_in_game(self: @ContractState, game_id: felt252) -> ContractAddress {
             let player = get_caller_address();
 

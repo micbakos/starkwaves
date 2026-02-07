@@ -7,7 +7,7 @@ mod tests;
 pub mod types;
 use core::dict::Felt252Dict;
 use merkle::{compute_merkle_root, verify};
-use types::{Orientation, Ship, ShipKindTrait, board};
+use types::{Orientation, Ship, ShipKindTrait, create_board};
 
 pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) -> felt252 {
     let ships_span = ships.span();
@@ -16,7 +16,7 @@ pub fn validate_and_commit(ships: Array<Ship>, board_size: u8, salt: felt252) ->
     assert_eligible_ships(ships_span, board_size);
     assert_ships_fit_in_board(ships_span, board_size);
 
-    let board = board(ships_span, board_size);
+    let board = create_board(ships_span, board_size);
 
     return compute_merkle_root(board, salt);
 }

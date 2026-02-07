@@ -1,5 +1,12 @@
 use starknet::ContractAddress;
-use crate::types::{Outcome, ShipKind};
+use crate::types::{BoardSize, Outcome, ShipKind};
+
+#[derive(Drop, starknet::Event, Serde)]
+pub struct PlayerEnteredLobbyEvent {
+    #[key]
+    pub lobby: BoardSize,
+    pub player: ContractAddress,
+}
 
 #[derive(Drop, starknet::Event, Serde)]
 pub struct PlayersAssembledEvent {

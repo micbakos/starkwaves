@@ -1,13 +1,13 @@
 use starknet::ContractAddress;
 use crate::types::{
-    FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal, OutcomeBeforeRevealTrait,
-    RevealStatus, total_hits,
+    BoardSize, BoardSizeTrait, FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal,
+    OutcomeBeforeRevealTrait, RevealStatus,
 };
 
 #[derive(Debug, Drop, starknet::Store, Clone)]
 pub struct Game {
     pub id: felt252,
-    pub board_size: u8,
+    pub board_size: BoardSize,
     pub player_a: ContractAddress,
     pub player_b: ContractAddress,
     pub player_a_bombs: ByteArray,
@@ -28,7 +28,7 @@ impl GameDefault of Default<Game> {
         let zero_address: ContractAddress = 0.try_into().unwrap();
         Game {
             id: 0, // id == 0 means game doesn't exist
-            board_size: 0,
+            board_size: Default::default(),
             player_a: zero_address,
             player_b: zero_address,
             player_a_bombs: Default::default(),
@@ -53,18 +53,8 @@ pub impl GameImpl of GameTrait {
     }
 
     fn new(
-        id: felt252, player_a: ContractAddress, player_b: ContractAddress, board_size: u8,
+        id: felt252, player_a: ContractAddress, player_b: ContractAddress, board_size: BoardSize,
     ) -> Game {
-        assert!(
-            board_size == 6 // 6x6
-                || board_size == 8 // 8x8
-                || board_size == 10 // 10x10
-                || board_size == 12 // 12x12
-                || board_size == 14 // 14x14
-                || board_size == 20, // 20x20
-            "Board is not a valid size.",
-        );
-
         Game {
             id,
             board_size,
@@ -109,9 +99,8 @@ pub impl GameImpl of GameTrait {
     }
 
     fn register_attack(ref self: Game, player: ContractAddress, x: u8, y: u8) {
-        assert!(
-            x < self.board_size && y < self.board_size, "Attack on ({}, {}) is out of bounds", x, y,
-        );
+        let size = self.board_size.size();
+        assert!(x < size && y < size, "Attack on ({}, {}) is out of bounds", x, y);
 
         if let Some(attacking_player) = self.attacking_player {
             assert!(attacking_player == player, "It is not player's {:?} turn yet.", player);
@@ -192,7 +181,7 @@ pub impl GameImpl of GameTrait {
     ) -> Option<Outcome> {
         assert!(self.outcome_before_reveal.is_some(), "The game is not finished yet.");
 
-        let game_board_size: u32 = self.board_size.into();
+        let game_board_size: u32 = self.board_size.size().into();
         assert!(
             board.len() == game_board_size * game_board_size,
             "The board revealed should be of size {}x{}",
@@ -258,7 +247,7 @@ pub impl GameImpl of GameTrait {
 #[generate_trait]
 impl InternalGameImpl of InternalGameTrait {
     fn check_won(self: @Game, attacker: @ContractAddress) -> bool {
-        let total_potential_hits = total_hits(*self.board_size);
+        let total_potential_hits = self.board_size.total_hits();
         if attacker == self.player_a {
             total_potential_hits == *self.player_a_hits
         } else {
@@ -317,7 +306,7 @@ pub impl GameBombsImpl of GameBombsTrait {
     fn offset_bytes(self: @Game, x: u8, y: u8) -> (u8, u8) {
         let board_size = *self.board_size;
 
-        let rows_offset: u32 = x.into() * board_size.into();
+        let rows_offset: u32 = x.into() * board_size.size().into();
         let offset = rows_offset + y.into();
 
         let high_byte: u8 = (offset / 256).try_into().unwrap();
@@ -369,7 +358,7 @@ pub impl GameBombsImpl of GameBombsTrait {
     }
 
     fn offset_to_cartesian(self: @Game, offset: u32) -> (u8, u8) {
-        let board_size: u32 = (*self.board_size).into();
+        let board_size: u32 = self.board_size.size().into();
         let x: u8 = (offset / board_size).try_into().unwrap();
         let y: u8 = (offset % board_size).try_into().unwrap();
         (x, y)

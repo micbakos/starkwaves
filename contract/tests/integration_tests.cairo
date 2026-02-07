@@ -7,11 +7,14 @@ use snforge_std::{
 use starknet::{ContractAddress, SyscallResultTrait};
 use starkwaves::events::{
     AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
-    PlayersAssembledEvent,
+    PlayerEnteredLobbyEvent, PlayersAssembledEvent,
 };
 use starkwaves::starkwaves::Starkwaves::Event;
 use starkwaves::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
-use starkwaves::types::{FireStatus, Orientation, Outcome, Ship, ShipKind, ShipKindTrait, board};
+use starkwaves::types::{
+    BoardSize, FireStatus, Orientation, Outcome, Ship, ShipKind, ShipKindTrait, SmallerBoardSize,
+    create_board,
+};
 
 // Test helper functions
 fn player_a() -> ContractAddress {
@@ -26,10 +29,36 @@ fn player_c() -> ContractAddress {
     0x3.try_into().unwrap()
 }
 
+fn owner() -> ContractAddress {
+    0x999.try_into().unwrap()
+}
+
 fn deploy_starkwaves() -> ContractAddress {
     let contract = declare("Starkwaves").unwrap_syscall().contract_class();
-    let (contract_address, _) = contract.deploy(@array![]).unwrap_syscall();
+    let (contract_address, _) = contract.deploy(@array![owner().into()]).unwrap_syscall();
     contract_address
+}
+
+/// Helper function to start a game using the lobby system.
+/// player_a joins the lobby second and becomes the attacker (game.player_a).
+/// player_b enters the lobby first and becomes the defender (game.player_b).
+/// Returns the game_id with player_a as the current caller.
+fn start_game_via_lobby(
+    dispatcher: IStarkwavesDispatcher,
+    contract_address: ContractAddress,
+    player_a: ContractAddress,
+    player_b: ContractAddress,
+    board_size: BoardSize,
+) -> felt252 {
+    // player_b enters lobby first
+    start_cheat_caller_address(contract_address, player_b);
+    let result = dispatcher.request_start_game(board_size);
+    assert!(result.is_none(), "First player should enter lobby");
+
+    // player_a joins and starts game - becomes game.player_a
+    start_cheat_caller_address(contract_address, player_a);
+    let game_id = dispatcher.request_start_game(board_size);
+    game_id.expect('Game should start')
 }
 
 fn create_6x6_ships() -> Array<Ship> {
@@ -48,16 +77,54 @@ fn get_cell_value(board: @Array<u8>, offset: u32) -> u8 {
 }
 
 // ===============================
-// Integration Tests - Game Start
+// Integration Tests - Lobby System
 // ===============================
+
+#[test]
+fn test_integration_player_enters_lobby() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    start_cheat_caller_address(contract_address, player_a());
+    let result = dispatcher.request_start_game(board_size);
+
+    assert!(result.is_none(), "First player should enter lobby, not start game");
+}
+
+#[test]
+fn test_integration_lobby_emits_event() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    let mut spy = spy_events();
+
+    start_cheat_caller_address(contract_address, player_a());
+    let _ = dispatcher.request_start_game(board_size);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::PlayerEntererLobby(
+                        PlayerEnteredLobbyEvent { lobby: board_size, player: player_a() },
+                    ),
+                ),
+            ],
+        );
+}
 
 #[test]
 fn test_integration_start_game() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     assert!(game_id == 1, "First game should have ID 1");
 }
@@ -66,11 +133,17 @@ fn test_integration_start_game() {
 fn test_integration_start_game_emits_event() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    // Player B enters lobby first
+    start_cheat_caller_address(contract_address, player_b());
+    let _ = dispatcher.request_start_game(board_size);
 
     let mut spy = spy_events();
 
+    // Player A joins and starts game - becomes game.player_a
     start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = dispatcher.request_start_game(board_size).expect('Game should start');
 
     spy
         .assert_emitted(
@@ -88,16 +161,31 @@ fn test_integration_start_game_emits_event() {
 }
 
 #[test]
-#[should_panic(expected: "Player 1 is already in another game.")]
-fn test_integration_player_cannot_start_two_games() {
+#[should_panic(expected: "Cannot enter another lobby.")]
+fn test_integration_player_cannot_enter_multiple_lobbies() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, player_a());
-    dispatcher.start_game(player_b(), 6);
+    let _ = dispatcher.request_start_game(BoardSize::Smaller(SmallerBoardSize::SixBySix));
 
-    // Try to start another game
-    dispatcher.start_game(player_c(), 6);
+    // Try to enter another lobby
+    let _ = dispatcher.request_start_game(BoardSize::Smaller(SmallerBoardSize::EightByEight));
+}
+
+#[test]
+#[should_panic(expected: "is already in another game.")]
+fn test_integration_player_cannot_start_two_games() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    // Start first game
+    start_game_via_lobby(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    // Player A tries to join another lobby while in game
+    start_cheat_caller_address(contract_address, player_a());
+    let _ = dispatcher.request_start_game(board_size);
 }
 
 // ===============================
@@ -108,16 +196,18 @@ fn test_integration_player_cannot_start_two_games() {
 fn test_integration_both_players_commit() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Start game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     // Create boards
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -126,6 +216,7 @@ fn test_integration_both_players_commit() {
     let root_b = compute_merkle_root(board_b, salt_b);
 
     // Player A commits
+    start_cheat_caller_address(contract_address, player_a());
     let mut spy = spy_events();
     dispatcher.commit_board(root_a, game_id);
 
@@ -151,10 +242,13 @@ fn test_integration_both_players_commit() {
 fn test_integration_player_cannot_commit_twice() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
-
     dispatcher.commit_board(0x123456, game_id);
     dispatcher.commit_board(0x654321, game_id); // Should panic
 }
@@ -167,16 +261,19 @@ fn test_integration_player_cannot_commit_twice() {
 fn test_integration_single_attack_defend_miss() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_b = create_6x6_ships();
-    let board_b = board(ships_b.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
     let salt_b: felt252 = 67890;
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -210,16 +307,19 @@ fn test_integration_single_attack_defend_miss() {
 fn test_integration_single_attack_defend_hit() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_b = create_6x6_ships();
-    let board_b = board(ships_b.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
     let salt_b: felt252 = 67890;
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -227,7 +327,6 @@ fn test_integration_single_attack_defend_hit() {
     // Player A attacks (0, 0) - Destroyer
     start_cheat_caller_address(contract_address, player_a());
     dispatcher.attack(game_id, 0, 0);
-    println!("START");
 
     // Player B defends with proof of hit
     let offset = 0;
@@ -245,11 +344,14 @@ fn test_integration_single_attack_defend_hit() {
 fn test_integration_wrong_player_attacks() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(0x222222, game_id);
@@ -264,11 +366,14 @@ fn test_integration_wrong_player_attacks() {
 fn test_integration_attack_out_of_bounds() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(0x222222, game_id);
@@ -286,15 +391,17 @@ fn test_integration_attack_out_of_bounds() {
 fn test_integration_three_rounds_alternating() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -302,6 +409,7 @@ fn test_integration_three_rounds_alternating() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -347,15 +455,17 @@ fn test_integration_three_rounds_alternating() {
 fn test_integration_complete_game_player_a_wins() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -363,6 +473,7 @@ fn test_integration_complete_game_player_a_wins() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -428,15 +539,17 @@ fn test_integration_complete_game_player_a_wins() {
 fn test_integration_mixed_hits_and_misses() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -444,6 +557,7 @@ fn test_integration_mixed_hits_and_misses() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -497,15 +611,17 @@ fn test_integration_mixed_hits_and_misses() {
 fn test_integration_cannot_attack_same_position_twice() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -513,6 +629,7 @@ fn test_integration_cannot_attack_same_position_twice() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -551,27 +668,23 @@ fn test_integration_cannot_attack_same_position_twice() {
 fn test_integration_different_board_sizes() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let player_d: ContractAddress = 0x4.try_into().unwrap();
 
-    // Test 8x8 - Player A vs Player B
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id_8 = dispatcher.start_game(player_b(), 8);
+    // Test 8x8 - Player A enters lobby, Player B joins
+    let game_id_8 = start_game_via_lobby(
+        dispatcher,
+        contract_address,
+        player_a(),
+        player_b(),
+        BoardSize::Smaller(SmallerBoardSize::EightByEight),
+    );
     assert!(game_id_8 == 1, "First game should be ID 1");
 
-    // Test 10x10 - Player C vs different player (using a new address)
-    let player_d: ContractAddress = 0x4.try_into().unwrap();
-    start_cheat_caller_address(contract_address, player_c());
-    let game_id_10 = dispatcher.start_game(player_d, 10);
+    // Test 10x10 - Player C enters lobby, Player D joins (Standard board)
+    let game_id_10 = start_game_via_lobby(
+        dispatcher, contract_address, player_c(), player_d, BoardSize::Standard,
+    );
     assert!(game_id_10 == 2, "Second game should be ID 2");
-}
-
-#[test]
-#[should_panic(expected: "Board is not a valid size")]
-fn test_integration_invalid_board_size() {
-    let contract_address = deploy_starkwaves();
-    let dispatcher = IStarkwavesDispatcher { contract_address };
-
-    start_cheat_caller_address(contract_address, player_a());
-    dispatcher.start_game(player_b(), 7); // Invalid size
 }
 
 // ===============================
@@ -580,16 +693,21 @@ fn test_integration_invalid_board_size() {
 
 #[test]
 fn test_players_assembled_event_on_game_creation() {
-    // Test that PlayersAssembledEvent is emitted when game is created
+    // Test that PlayersAssembledEvent is emitted when game is created via lobby
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
+    // Player B enters lobby first
+    start_cheat_caller_address(contract_address, player_b());
+    let _ = dispatcher.request_start_game(board_size);
 
     let mut spy = spy_events();
 
+    // Player A joins and starts game - becomes game.player_a
     start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = dispatcher.request_start_game(board_size).expect('Game should start');
 
-    // Should emit PlayersAssembledEvent
     spy
         .assert_emitted(
             @array![
@@ -610,11 +728,14 @@ fn test_game_started_event_only_after_both_commits() {
     // Test that GameStartedEvent is only emitted after BOTH players commit
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     // Player A commits - should NOT emit GameStartedEvent yet
+    start_cheat_caller_address(contract_address, player_a());
     let mut spy = spy_events();
     dispatcher.commit_board(0x111111, game_id);
 
@@ -656,16 +777,19 @@ fn test_hit_event_only_on_actual_hits() {
     // Test that HitEvent is only emitted for hits, not misses
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_b = create_6x6_ships();
-    let board_b = board(ships_b.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
     let salt_b: felt252 = 67890;
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -712,21 +836,24 @@ fn test_hit_event_emitted_on_actual_hit() {
     // Test that HitEvent IS emitted for actual hits
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game with BOTH players having valid board roots
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
 
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -772,9 +899,11 @@ fn test_non_player_cannot_commit() {
     // Test that a player not in the game cannot commit
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     // Player C (not in game) tries to commit
     start_cheat_caller_address(contract_address, player_c());
@@ -787,11 +916,14 @@ fn test_no_events_emitted_on_single_commit() {
     // and no game-start events until both commit
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     // Now commit only one player
+    start_cheat_caller_address(contract_address, player_a());
     let mut spy = spy_events();
     dispatcher.commit_board(0x111111, game_id);
 
@@ -814,16 +946,19 @@ fn test_game_reveal_request_on_failed_proof() {
     // Test that GameRevealRequestEvent is emitted when proof verification fails
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_b = create_6x6_ships();
-    let board_b = board(ships_b.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
     let salt_b: felt252 = 67890;
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(0x111111, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -866,14 +1001,17 @@ fn test_game_reveal_request_on_failed_proof() {
 fn play_complete_game_player_a_wins(
     dispatcher: IStarkwavesDispatcher, contract_address: ContractAddress,
 ) -> (felt252, Array<u8>, Array<u8>, felt252, felt252) {
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -881,6 +1019,7 @@ fn play_complete_game_player_a_wins(
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -997,7 +1136,7 @@ fn test_reveal_player_b_reveals_fake_board() {
         Ship { kind: ShipKind::Destroyer, x: 5, y: 4, orientation: Orientation::Horizontal },
         Ship { kind: ShipKind::Cruiser, x: 0, y: 0, orientation: Orientation::Vertical },
     ];
-    let fake_board_b = board(fake_ships_b.span(), 6);
+    let fake_board_b = create_board(fake_ships_b.span(), 6);
 
     // Player A reveals honestly
     start_cheat_caller_address(contract_address, player_a());
@@ -1043,7 +1182,7 @@ fn test_reveal_player_a_reveals_fake_board() {
         Ship { kind: ShipKind::Destroyer, x: 5, y: 4, orientation: Orientation::Horizontal },
         Ship { kind: ShipKind::Cruiser, x: 0, y: 0, orientation: Orientation::Vertical },
     ];
-    let fake_board_a = board(fake_ships_a.span(), 6);
+    let fake_board_a = create_board(fake_ships_a.span(), 6);
 
     // Player A reveals fake board
     start_cheat_caller_address(contract_address, player_a());
@@ -1089,7 +1228,7 @@ fn test_reveal_both_players_reveal_fake_boards() {
         Ship { kind: ShipKind::Destroyer, x: 5, y: 4, orientation: Orientation::Horizontal },
         Ship { kind: ShipKind::Cruiser, x: 0, y: 0, orientation: Orientation::Vertical },
     ];
-    let fake_board = board(fake_ships.span(), 6);
+    let fake_board = create_board(fake_ships.span(), 6);
 
     // Player A reveals fake board
     start_cheat_caller_address(contract_address, player_a());
@@ -1126,15 +1265,17 @@ fn test_reveal_after_failed_proof_honest_reveals() {
     // Expected: FailedToProvideProof(player_b) - Player A wins because B cheated during game
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -1142,6 +1283,7 @@ fn test_reveal_after_failed_proof_honest_reveals() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -1193,15 +1335,17 @@ fn test_reveal_after_failed_proof_cheater_also_reveals_fake() {
     // Expected: FailedToProvideProof(player_b) - Player A wins
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -1209,6 +1353,7 @@ fn test_reveal_after_failed_proof_cheater_also_reveals_fake() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -1234,7 +1379,7 @@ fn test_reveal_after_failed_proof_cheater_also_reveals_fake() {
         Ship { kind: ShipKind::Destroyer, x: 5, y: 4, orientation: Orientation::Horizontal },
         Ship { kind: ShipKind::Cruiser, x: 0, y: 0, orientation: Orientation::Vertical },
     ];
-    let fake_board = board(fake_ships.span(), 6);
+    let fake_board = create_board(fake_ships.span(), 6);
 
     let mut spy = spy_events();
     start_cheat_caller_address(contract_address, player_b());
@@ -1266,15 +1411,17 @@ fn test_reveal_after_failed_proof_both_cheat_on_reveal() {
     // Expected: Null outcome (both are now cheaters)
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -1282,6 +1429,7 @@ fn test_reveal_after_failed_proof_both_cheat_on_reveal() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -1303,7 +1451,7 @@ fn test_reveal_after_failed_proof_both_cheat_on_reveal() {
         Ship { kind: ShipKind::Destroyer, x: 5, y: 4, orientation: Orientation::Horizontal },
         Ship { kind: ShipKind::Cruiser, x: 0, y: 0, orientation: Orientation::Vertical },
     ];
-    let fake_board = board(fake_ships.span(), 6);
+    let fake_board = create_board(fake_ships.span(), 6);
 
     start_cheat_caller_address(contract_address, player_a());
     dispatcher.reveal(game_id, fake_board.clone(), salt_a);
@@ -1354,15 +1502,17 @@ fn test_reveal_player_cannot_reveal_twice() {
 fn test_reveal_fails_if_game_not_finished() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
 
     // Setup game but don't finish it
-    start_cheat_caller_address(contract_address, player_a());
-    let game_id = dispatcher.start_game(player_b(), 6);
+    let game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     let ships_a = create_6x6_ships();
     let ships_b = create_6x6_ships();
-    let board_a = board(ships_a.span(), 6);
-    let board_b = board(ships_b.span(), 6);
+    let board_a = create_board(ships_a.span(), 6);
+    let board_b = create_board(ships_b.span(), 6);
 
     let salt_a: felt252 = 12345;
     let salt_b: felt252 = 67890;
@@ -1370,6 +1520,7 @@ fn test_reveal_fails_if_game_not_finished() {
     let root_a = compute_merkle_root(board_a.clone(), salt_a);
     let root_b = compute_merkle_root(board_b.clone(), salt_b);
 
+    start_cheat_caller_address(contract_address, player_a());
     dispatcher.commit_board(root_a, game_id);
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
@@ -1408,8 +1559,10 @@ fn test_reveal_clears_game_from_storage() {
     dispatcher.reveal(game_id, board_b.clone(), salt_b);
 
     // Now both players should be able to start a new game
-    start_cheat_caller_address(contract_address, player_a());
-    let new_game_id = dispatcher.start_game(player_b(), 6);
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let new_game_id = start_game_via_lobby(
+        dispatcher, contract_address, player_a(), player_b(), board_size,
+    );
 
     assert!(new_game_id == 2, "Should be able to start a new game after reveal");
 }

@@ -2,7 +2,8 @@ use core::pedersen::pedersen;
 use merkle::{generate_proof, verify};
 use starkwaves::types::{Orientation, Ship, ShipKind};
 use starkwaves::validate_and_commit;
-use crate::{board, compute_merkle_root};
+use crate::types::create_board;
+use merkle::compute_merkle_root;
 
 // ===============================
 // Valid Board Tests
@@ -561,7 +562,7 @@ fn test_generate_proof_verifies() {
         Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
     ];
     let salt: felt252 = 1234;
-    let board = board(ships.span(), 6);
+    let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
     let proof = generate_proof(board.clone(), salt, 0);
@@ -579,7 +580,7 @@ fn test_fake_value_correct_salt_does_not_verify() {
         Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
     ];
     let salt: felt252 = 1234;
-    let board = board(ships.span(), 6);
+    let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
     let proof = generate_proof(board.clone(), salt, 0);
@@ -597,7 +598,7 @@ fn test_correct_value_incorrect_salt_does_not_verify() {
         Ship { kind: ShipKind::Cruiser, x: 2, y: 1, orientation: Orientation::Vertical },
     ];
     let salt: felt252 = 1234;
-    let board = board(ships.span(), 6);
+    let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
     let proof = generate_proof(board.clone(), salt, 0);
