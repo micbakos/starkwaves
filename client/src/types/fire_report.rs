@@ -2,6 +2,7 @@ use crate::types::{Ship, ShipKind};
 use std::fmt::{Display, Formatter};
 use starknet::core::crypto::pedersen_hash;
 use starknet::core::types::Felt;
+use crate::types::contract::starkwaves::FireStatus as SaltedFireStatus;
 
 #[derive(Debug)]
 pub struct FireReport {
@@ -41,12 +42,26 @@ impl FireReport {
         }
     }
 
-    pub fn salted_status(&self, salt: u64) -> Felt {
+    pub fn salted_status_value(&self, salt: u64) -> Felt {
         let status = match &self.status {
             FireStatus::Miss => 0,
             FireStatus::Hit(kind) => kind.id()
         };
         pedersen_hash(&Felt::from(status), &Felt::from(salt))
+    }
+
+    pub fn salted_fire_status(&self, salt: u64) -> SaltedFireStatus {
+        match &self.status {
+            FireStatus::Miss => {
+                let status = pedersen_hash(&Felt::ZERO, &salt.into());
+                SaltedFireStatus::Miss(status)
+            },
+            FireStatus::Hit(kind) => {
+                let id = Felt::from(kind.id());
+                let status = pedersen_hash(&id, &salt.into());
+                SaltedFireStatus::Hit(((*kind).into(), status))
+            }
+        }
     }
 }
 

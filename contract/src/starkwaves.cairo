@@ -30,7 +30,7 @@ pub mod Starkwaves {
     };
     use starknet::{ContractAddress, get_caller_address};
     use crate::events::{
-        AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
+        AttackEvent, AttackResultEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent,
         PlayerEnteredLobbyEvent, PlayersAssembledEvent,
     };
     use crate::game::{Game, GameTrait};
@@ -60,7 +60,7 @@ pub mod Starkwaves {
         PlayersAssembled: PlayersAssembledEvent,
         GameStarted: GameStartedEvent,
         Attack: AttackEvent,
-        Hit: HitEvent,
+        AttackResult: AttackResultEvent,
         GameRevealRequest: GameRevealRequestEvent,
         GameOver: GameOverEvent,
         // Events from other components
@@ -139,19 +139,19 @@ pub mod Starkwaves {
             let defender = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            let hit_result = game.defend(defender, status, proof);
+            let hit_report = game.defend(defender, status, proof);
             self.open_games.entry(game_id).write(game.clone());
 
-            if let Some(hit) = hit_result {
+            if let Some(report) = hit_report {
                 self
                     .emit(
-                        HitEvent {
+                        AttackResultEvent {
                             game_id,
-                            attacker: hit.attacker,
-                            defender: hit.defender,
-                            x: hit.x,
-                            y: hit.y,
-                            ship_kind: hit.ship_kind,
+                            attacker: report.attacker,
+                            defender: report.defender,
+                            x: report.x,
+                            y: report.y,
+                            ship_kind: report.hit,
                         },
                     )
             }
@@ -235,7 +235,7 @@ pub mod Starkwaves {
             self.open_games.entry(game_id).write(game);
             self.next_game_id.write(game_id + 1);
 
-            self.emit(PlayersAssembledEvent { game_id, player_a, player_b });
+            self.emit(PlayersAssembledEvent { game_id, player_a, player_b, board_size });
 
             game_id
         }

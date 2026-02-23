@@ -10,6 +10,7 @@ pub mod fire_report;
 pub mod environment;
 pub mod contract;
 pub mod game_state;
+pub mod game_over_outcome;
 
 pub use board::Board;
 pub use cell::Cell;

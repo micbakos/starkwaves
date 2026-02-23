@@ -1,49 +1,63 @@
-use std::env;
 use async_trait::async_trait;
-use starknet::accounts::ConnectedAccount;
-use starkwaves_client::game::event_handler::EventHandler;
-use starkwaves_client::game::game::Game;
+use clap::Parser;
+use log::{debug, LevelFilter};
+use starknet::core::types::Felt;
+use starkwaves_client::game::game::{Game, GameCallback, GameUpdate};
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
-use starkwaves_client::types::contract::events::GameEvent;
 use starkwaves_client::types::environment::Environment;
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
+use std::env;
 use std::sync::Arc;
-use log::{debug, LevelFilter};
-use tokio::sync::Mutex;
+
+#[derive(Parser, Debug)]
+#[command(name = "starkwaves")]
+#[command(about = "Starkwaves battleship game client")]
+struct Args {
+    /// Player's private key (hex format, with or without 0x prefix)
+    #[arg(short = 'k', long)]
+    private_key: String,
+
+    /// Player's account address (hex format, with or without 0x prefix)
+    #[arg(short = 'a', long)]
+    address: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     logger_init();
 
+    let args = Args::parse();
+
+    let private_key = Felt::from_hex(&args.private_key)
+        .expect("Invalid private key format");
+    let address = Felt::from_hex(&args.address)
+        .expect("Invalid address format");
+
     let env = Environment::new();
-    debug!("{:?}", env);
 
     let rpc_provider = env.rpc_provider();
-    let host = env.host(&rpc_provider);
+    let player = env.player(private_key, address, &rpc_provider);
 
-    let game = Game::create(
+    let print_callback = PrintCallback;
+
+    // Game::join now returns Arc<Mutex<Game>> and handles event subscription internally
+    let game = Game::join(
         env.contract_address,
-        host.clone(),
-        env.opponent(),
-        BoardSize::Smaller(SmallerBoardSize::SixBySix)
+        env.ws_url,
+        player,
+        BoardSize::Smaller(SmallerBoardSize::SixBySix),
+        Arc::new(print_callback.clone())
     ).await?;
 
-    let game = Arc::new(Mutex::new(game));
-    let handler = StarkwavesHandler::new(Arc::clone(&game));
-    let handler = Arc::new(Mutex::new(handler));
-
-    let game_for_subscription = Arc::clone(&game);
-    let handler_clone = Arc::clone(&handler);
-    let events_task = tokio::spawn(async move {
-        let mut game = game_for_subscription.lock().await;
-
-        if let Err(e) = game.subscribe_to_events(
-            env.ws_url,
-            handler_clone
-        ).await {
-            eprintln!("Event subscription error: {}", e);
+    {
+        let game = game.lock().await;
+        if let Some(opponent) = game.opponent() {
+            print_callback.on_update(GameUpdate::OpponentJoined { opponent }).await;
+        } else {
+            println!("You entered lobby {}", game.board_size());
         }
-    });
+    }
+
 
     let mut input = String::new();
     loop {
@@ -84,76 +98,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    events_task.abort();
-
     Ok(())
 }
 
-struct StarkwavesHandler<A>
-where
-    A: ConnectedAccount + Sync + Send,
-{
-    game: Arc<Mutex<Game<A>>>,
-}
-
-impl<A> StarkwavesHandler<A>
-where
-    A: ConnectedAccount + Sync + Send,
-    A::Provider: Send + Sync,
-{
-    fn new(game: Arc<Mutex<Game<A>>>) -> Self {
-        Self { game }
-    }
-}
+#[derive(Clone)]
+pub struct PrintCallback;
 
 #[async_trait]
-impl<A> EventHandler for StarkwavesHandler<A>
-where
-    A: ConnectedAccount + Sync + Send + 'static,
-    A::Provider: Send + Sync,
-{
-    async fn handle_event(&self, event: GameEvent) {
-        match event {
-            GameEvent::PlayersAssembled { .. } => {
-                // Do nothing, already handled
+impl GameCallback for PrintCallback {
+    async fn on_update(&self, update: GameUpdate) {
+        match update {
+            GameUpdate::OpponentJoined { opponent } => {
+                println!("Opponent joined {:#x}. Place your ships.", opponent.0);
             }
-            GameEvent::GameStarted { attacker, .. } => {
-                let mut game = self.game.lock().await;
-                game.on_game_started(attacker);
-
-                let player_address = game.player_address();
-                if player_address == attacker {
-                    println!("Match started. It is your turn...")
+            GameUpdate::GameStarted { first_attacker } => {
+                println!("Game started! First attacker: {:#x}", first_attacker.0);
+            }
+            GameUpdate::IncomingAttack { x, y } => {
+                println!("Incoming attack at ({}, {})", x, y);
+            }
+            GameUpdate::AttackResult { x, y, hit } => {
+                if hit {
+                    println!("Your attack at ({}, {}) was a HIT!", x, y);
                 } else {
-                    println!("Match started. Wait for the opponent to fire first...")
+                    println!("Your attack at ({}, {}) missed.", x, y);
                 }
             }
-            GameEvent::Attack { player, x, y, .. } => {
-                let mut game = self.game.lock().await;
-
-                if player == game.player_address() {
-                    // Ignore, we got a report about the attack we just did.
-                } else if player == game.opponent_address() {
-                    let x: u8 = x.try_into().unwrap();
-                    let y: u8 = y.try_into().unwrap();
-                    let _ = game.defend(x, y).await;
-                }
+            GameUpdate::YouWereHit { x, y } => {
+                println!("You were hit at ({}, {})", x, y);
             }
-            GameEvent::Hit { attacker, x, y, ship_kind, .. } => {
-                let game = self.game.lock().await;
-                if attacker == game.player_address() {
-                    println!("HIT!");
-                    println!("- ({}, {}) => {}", x, y, ship_kind)
-                } else if attacker == game.opponent_address() {
-                    println!("You got bombed");
-                    println!("- ({}, {}) => {}", x, y, ship_kind)
-                }
+            GameUpdate::RevealRequested => {
+                println!("Board reveal requested");
             }
-            GameEvent::GameRevealRequest { .. } => {
-                println!("GameReveal {:?}", event);
-            }
-            GameEvent::GameOver { .. } => {
-                println!("GameOver {:?}", event);
+            GameUpdate::GameOver { outcome } => {
+                println!("Game over! Outcome: {:?}", outcome);
             }
         }
     }

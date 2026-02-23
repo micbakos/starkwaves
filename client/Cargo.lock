@@ -4294,6 +4294,7 @@ dependencies = [
  "cairo-lang-sierra",
  "cairo-native",
  "chrono",
+ "clap",
  "colog",
  "derive_more",
  "dirs",
@@ -4306,20 +4307,10 @@ dependencies = [
  "serde_json",
  "starknet",
  "starknet-tokio-tungstenite",
- "starkwaves-macros",
  "thiserror 2.0.17",
  "tokio",
  "url",
  "uuid 1.19.0",
-]
-
-[[package]]
-name = "starkwaves-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.111",
 ]
 
 [[package]]

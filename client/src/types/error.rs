@@ -29,6 +29,9 @@ pub enum GameError {
     #[error("You cannot place any more {kind}s for this board size.")]
     InvalidShipPlacementKind { kind: ShipKind },
 
+    #[error("Game is not started yet")]
+    GameNotStarted,
+
     #[error("All ships are not placed in board")]
     BoardNotReady,
 
@@ -147,6 +150,12 @@ impl Into<GameError> for SubscriptionReceiveError {
 }
 
 impl Into<GameError> for CodecError {
+    fn into(self) -> GameError {
+        GameError::ProviderError { error: format!("{:?}", self) }
+    }
+}
+
+impl Into<GameError> for String {
     fn into(self) -> GameError {
         GameError::ProviderError { error: format!("{:?}", self) }
     }

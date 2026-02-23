@@ -148,16 +148,14 @@ pub impl GameImpl of GameTrait {
             return None;
         }
 
-        let mut hit_result = None;
+        let (x, y) = self.offset_to_cartesian(offset);
+        let mut hit_result = HitReport {
+            attacker: attacking_player, defender: player, x, y, hit: None,
+        };
         if let FireStatus::Hit((kind, _)) = status {
             self.increment_success_hits(attacking_player);
-            let (x, y) = self.offset_to_cartesian(offset);
-            hit_result =
-                Some(
-                    HitReport {
-                        attacker: attacking_player, defender: player, x, y, ship_kind: kind,
-                    },
-                );
+
+            hit_result.hit = Some(kind);
 
             let won = self.check_won(@attacking_player);
             if won {
@@ -173,7 +171,7 @@ pub impl GameImpl of GameTrait {
             }
         }
 
-        hit_result
+        Some(hit_result)
     }
 
     fn reveal(

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use crate::types::board_size::BoardSize;
 use crate::types::error::GameError;
+use crate::types::contract::starkwaves::ShipKind as ContractShipKind;
 
 /// Represents different types of ships in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
@@ -109,6 +110,19 @@ impl TryFrom<&str> for ShipKind {
                 expected: "SC|CA|BA|CR|SU|DE".to_string(),
                 received: value.to_string(),
             }),
+        }
+    }
+}
+
+impl Into<ContractShipKind> for ShipKind {
+    fn into(self) -> ContractShipKind {
+        match self {
+            ShipKind::SuperCarrier => ContractShipKind::SuperCarrier,
+            ShipKind::Carrier => ContractShipKind::Carrier,
+            ShipKind::Battleship => ContractShipKind::Battleship,
+            ShipKind::Cruiser => ContractShipKind::Cruiser,
+            ShipKind::Submarine => ContractShipKind::Submarine,
+            ShipKind::Destroyer => ContractShipKind::Destroyer,
         }
     }
 }

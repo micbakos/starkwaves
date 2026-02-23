@@ -14,6 +14,7 @@ pub struct PlayersAssembledEvent {
     pub game_id: felt252,
     pub player_a: ContractAddress,
     pub player_b: ContractAddress,
+    pub board_size: BoardSize,
 }
 
 #[derive(Drop, starknet::Event, Serde)]
@@ -34,14 +35,14 @@ pub struct AttackEvent {
 }
 
 #[derive(Drop, starknet::Event, Serde)]
-pub struct HitEvent {
+pub struct AttackResultEvent {
     #[key]
     pub game_id: felt252,
     pub attacker: ContractAddress,
     pub defender: ContractAddress,
     pub x: u8,
     pub y: u8,
-    pub ship_kind: ShipKind,
+    pub ship_kind: Option<ShipKind>,
 }
 
 #[derive(Drop, starknet::Event, Serde)]

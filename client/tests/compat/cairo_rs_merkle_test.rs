@@ -88,7 +88,7 @@ mod tests {
         assert!(!report.proof.is_empty());
 
         let cairo_verified = cairo_merkle_runner.verify(
-            report.salted_status(salt),
+            report.salted_status_value(salt),
             report.proof.clone(),
             root,
             0

@@ -30,5 +30,5 @@ pub struct HitReport {
     pub defender: ContractAddress,
     pub x: u8,
     pub y: u8,
-    pub ship_kind: ShipKind,
+    pub hit: Option<ShipKind>,
 }

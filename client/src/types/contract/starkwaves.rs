@@ -130,6 +130,94 @@ impl AttackEvent {
     }
 }
 #[derive(Debug, Clone)]
+pub struct AttackResultEvent {
+    pub game_id: starknet::core::types::Felt,
+    pub attacker: cainome::cairo_serde::ContractAddress,
+    pub defender: cainome::cairo_serde::ContractAddress,
+    pub x: u8,
+    pub y: u8,
+    pub ship_kind: Option<ShipKind>,
+}
+impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
+    type RustType = Self;
+    const SERIALIZED_SIZE: std::option::Option<usize> = None;
+    #[inline]
+    fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
+        let mut __size = 0;
+        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
+                &__rust.attacker,
+            );
+        __size
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
+                &__rust.defender,
+            );
+        __size += u8::cairo_serialized_size(&__rust.x);
+        __size += u8::cairo_serialized_size(&__rust.y);
+        __size += Option::<ShipKind>::cairo_serialized_size(&__rust.ship_kind);
+        __size
+    }
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+        let mut __out: Vec<starknet::core::types::Felt> = vec![];
+        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+        __out
+            .extend(
+                cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.attacker),
+            );
+        __out
+            .extend(
+                cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.defender),
+            );
+        __out.extend(u8::cairo_serialize(&__rust.x));
+        __out.extend(u8::cairo_serialize(&__rust.y));
+        __out.extend(Option::<ShipKind>::cairo_serialize(&__rust.ship_kind));
+        __out
+    }
+    fn cairo_deserialize(
+        __felts: &[starknet::core::types::Felt],
+        __offset: usize,
+    ) -> cainome::cairo_serde::Result<Self::RustType> {
+        let mut __offset = __offset;
+        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let attacker = cainome::cairo_serde::ContractAddress::cairo_deserialize(
+            __felts,
+            __offset,
+        )?;
+        __offset
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&attacker);
+        let defender = cainome::cairo_serde::ContractAddress::cairo_deserialize(
+            __felts,
+            __offset,
+        )?;
+        __offset
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&defender);
+        let x = u8::cairo_deserialize(__felts, __offset)?;
+        __offset += u8::cairo_serialized_size(&x);
+        let y = u8::cairo_deserialize(__felts, __offset)?;
+        __offset += u8::cairo_serialized_size(&y);
+        let ship_kind = Option::<ShipKind>::cairo_deserialize(__felts, __offset)?;
+        __offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
+        Ok(AttackResultEvent {
+            game_id,
+            attacker,
+            defender,
+            x,
+            y,
+            ship_kind,
+        })
+    }
+}
+impl AttackResultEvent {
+    pub fn event_selector() -> starknet::core::types::Felt {
+        starknet::core::utils::get_selector_from_name("AttackResultEvent").unwrap()
+    }
+    pub fn event_name() -> &'static str {
+        "AttackResultEvent"
+    }
+}
+#[derive(Debug, Clone)]
 pub struct GameOverEvent {
     pub game_id: starknet::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
@@ -346,94 +434,6 @@ impl GameStartedEvent {
     }
 }
 #[derive(Debug, Clone)]
-pub struct HitEvent {
-    pub game_id: starknet::core::types::Felt,
-    pub attacker: cainome::cairo_serde::ContractAddress,
-    pub defender: cainome::cairo_serde::ContractAddress,
-    pub x: u8,
-    pub y: u8,
-    pub ship_kind: ShipKind,
-}
-impl cainome::cairo_serde::CairoSerde for HitEvent {
-    type RustType = Self;
-    const SERIALIZED_SIZE: std::option::Option<usize> = None;
-    #[inline]
-    fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
-        let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
-        __size
-            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
-                &__rust.attacker,
-            );
-        __size
-            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
-                &__rust.defender,
-            );
-        __size += u8::cairo_serialized_size(&__rust.x);
-        __size += u8::cairo_serialized_size(&__rust.y);
-        __size += ShipKind::cairo_serialized_size(&__rust.ship_kind);
-        __size
-    }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
-        __out
-            .extend(
-                cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.attacker),
-            );
-        __out
-            .extend(
-                cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.defender),
-            );
-        __out.extend(u8::cairo_serialize(&__rust.x));
-        __out.extend(u8::cairo_serialize(&__rust.y));
-        __out.extend(ShipKind::cairo_serialize(&__rust.ship_kind));
-        __out
-    }
-    fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
-        __offset: usize,
-    ) -> cainome::cairo_serde::Result<Self::RustType> {
-        let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
-        let attacker = cainome::cairo_serde::ContractAddress::cairo_deserialize(
-            __felts,
-            __offset,
-        )?;
-        __offset
-            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&attacker);
-        let defender = cainome::cairo_serde::ContractAddress::cairo_deserialize(
-            __felts,
-            __offset,
-        )?;
-        __offset
-            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&defender);
-        let x = u8::cairo_deserialize(__felts, __offset)?;
-        __offset += u8::cairo_serialized_size(&x);
-        let y = u8::cairo_deserialize(__felts, __offset)?;
-        __offset += u8::cairo_serialized_size(&y);
-        let ship_kind = ShipKind::cairo_deserialize(__felts, __offset)?;
-        __offset += ShipKind::cairo_serialized_size(&ship_kind);
-        Ok(HitEvent {
-            game_id,
-            attacker,
-            defender,
-            x,
-            y,
-            ship_kind,
-        })
-    }
-}
-impl HitEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("HitEvent").unwrap()
-    }
-    pub fn event_name() -> &'static str {
-        "HitEvent"
-    }
-}
-#[derive(Debug, Clone)]
 pub struct OwnershipTransferStarted {
     pub previous_owner: cainome::cairo_serde::ContractAddress,
     pub new_owner: cainome::cairo_serde::ContractAddress,
@@ -629,6 +629,7 @@ pub struct PlayersAssembledEvent {
     pub game_id: starknet::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
     pub player_b: cainome::cairo_serde::ContractAddress,
+    pub board_size: BoardSize,
 }
 impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
     type RustType = Self;
@@ -645,6 +646,7 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.player_b,
             );
+        __size += BoardSize::cairo_serialized_size(&__rust.board_size);
         __size
     }
     fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
@@ -658,6 +660,7 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player_b),
             );
+        __out.extend(BoardSize::cairo_serialize(&__rust.board_size));
         __out
     }
     fn cairo_deserialize(
@@ -679,10 +682,13 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
         )?;
         __offset
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&player_b);
+        let board_size = BoardSize::cairo_deserialize(__felts, __offset)?;
+        __offset += BoardSize::cairo_serialized_size(&board_size);
         Ok(PlayersAssembledEvent {
             game_id,
             player_a,
             player_b,
+            board_size,
         })
     }
 }
@@ -768,7 +774,7 @@ pub enum Event {
     PlayersAssembled(PlayersAssembledEvent),
     GameStarted(GameStartedEvent),
     Attack(AttackEvent),
-    Hit(HitEvent),
+    AttackResult(AttackResultEvent),
     GameRevealRequest(GameRevealRequestEvent),
     GameOver(GameOverEvent),
     OwnableEvent(OwnableComponentEvent),
@@ -787,7 +793,7 @@ impl cainome::cairo_serde::CairoSerde for Event {
             }
             Event::GameStarted(val) => GameStartedEvent::cairo_serialized_size(val) + 1,
             Event::Attack(val) => AttackEvent::cairo_serialized_size(val) + 1,
-            Event::Hit(val) => HitEvent::cairo_serialized_size(val) + 1,
+            Event::AttackResult(val) => AttackResultEvent::cairo_serialized_size(val) + 1,
             Event::GameRevealRequest(val) => {
                 GameRevealRequestEvent::cairo_serialized_size(val) + 1
             }
@@ -824,10 +830,10 @@ impl cainome::cairo_serde::CairoSerde for Event {
                 temp.extend(AttackEvent::cairo_serialize(val));
                 temp
             }
-            Event::Hit(val) => {
+            Event::AttackResult(val) => {
                 let mut temp = vec![];
                 temp.extend(usize::cairo_serialize(&4usize));
-                temp.extend(HitEvent::cairo_serialize(val));
+                temp.extend(AttackResultEvent::cairo_serialize(val));
                 temp
             }
             Event::GameRevealRequest(val) => {
@@ -885,7 +891,13 @@ impl cainome::cairo_serde::CairoSerde for Event {
             3usize => {
                 Ok(Event::Attack(AttackEvent::cairo_deserialize(__felts, __offset + 1)?))
             }
-            4usize => Ok(Event::Hit(HitEvent::cairo_deserialize(__felts, __offset + 1)?)),
+            4usize => {
+                Ok(
+                    Event::AttackResult(
+                        AttackResultEvent::cairo_deserialize(__felts, __offset + 1)?,
+                    ),
+                )
+            }
             5usize => {
                 Ok(
                     Event::GameRevealRequest(
@@ -1040,11 +1052,29 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                 += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                     &player_b,
                 );
+            let board_size = match BoardSize::cairo_deserialize(
+                &event.data,
+                data_offset,
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "board_size",
+                            "PlayersAssembled",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += BoardSize::cairo_serialized_size(&board_size);
             return Ok(
                 Event::PlayersAssembled(PlayersAssembledEvent {
                     game_id,
                     player_a,
                     player_b,
+                    board_size,
                 }),
             );
         }
@@ -1201,8 +1231,8 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("Hit")
-                .unwrap_or_else(|_| panic!("Invalid selector for {}", "Hit"))
+            == starknet::core::utils::get_selector_from_name("AttackResult")
+                .unwrap_or_else(|_| panic!("Invalid selector for {}", "AttackResult"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
@@ -1216,7 +1246,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "game_id",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1233,7 +1263,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "attacker",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1253,7 +1283,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "defender",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1270,7 +1300,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "x",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1284,29 +1314,31 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "y",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
                 }
             };
             data_offset += u8::cairo_serialized_size(&y);
-            let ship_kind = match ShipKind::cairo_deserialize(&event.data, data_offset) {
+            let ship_kind = match Option::<
+                ShipKind,
+            >::cairo_deserialize(&event.data, data_offset) {
                 Ok(v) => v,
                 Err(e) => {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "ship_kind",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
                 }
             };
-            data_offset += ShipKind::cairo_serialized_size(&ship_kind);
+            data_offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
             return Ok(
-                Event::Hit(HitEvent {
+                Event::AttackResult(AttackResultEvent {
                     game_id,
                     attacker,
                     defender,
@@ -1717,11 +1749,29 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                 += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                     &player_b,
                 );
+            let board_size = match BoardSize::cairo_deserialize(
+                &event.data,
+                data_offset,
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "board_size",
+                            "PlayersAssembled",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += BoardSize::cairo_serialized_size(&board_size);
             return Ok(
                 Event::PlayersAssembled(PlayersAssembledEvent {
                     game_id,
                     player_a,
                     player_b,
+                    board_size,
                 }),
             );
         }
@@ -1878,8 +1928,8 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("Hit")
-                .unwrap_or_else(|_| panic!("Invalid selector for {}", "Hit"))
+            == starknet::core::utils::get_selector_from_name("AttackResult")
+                .unwrap_or_else(|_| panic!("Invalid selector for {}", "AttackResult"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
@@ -1893,7 +1943,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "game_id",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1910,7 +1960,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "attacker",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1930,7 +1980,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "defender",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1947,7 +1997,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "x",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
@@ -1961,29 +2011,31 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "y",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
                 }
             };
             data_offset += u8::cairo_serialized_size(&y);
-            let ship_kind = match ShipKind::cairo_deserialize(&event.data, data_offset) {
+            let ship_kind = match Option::<
+                ShipKind,
+            >::cairo_deserialize(&event.data, data_offset) {
                 Ok(v) => v,
                 Err(e) => {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
                             "ship_kind",
-                            "Hit",
+                            "AttackResult",
                             e,
                         ),
                     );
                 }
             };
-            data_offset += ShipKind::cairo_serialized_size(&ship_kind);
+            data_offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
             return Ok(
-                Event::Hit(HitEvent {
+                Event::AttackResult(AttackResultEvent {
                     game_id,
                     attacker,
                     defender,
