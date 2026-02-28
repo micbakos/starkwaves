@@ -1,9 +1,8 @@
 use crate::types::contract::starkwaves::Event;
 use crate::types::error::GameError;
-use starknet::core::types::{Event as StarknetEvent, Felt};
 use starknet::core::types::TransactionReceipt;
+use starknet::core::types::{Event as StarknetEvent, Felt};
 use starknet::macros::selector;
-use tokio::select;
 
 pub trait IntoEvents {
     fn into_events(self) -> Result<Vec<Event>, GameError>;

@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use clap::Parser;
-use log::{debug, LevelFilter};
-use starknet::core::types::Felt;
+use log::LevelFilter;
 use starkwaves_client::game::game::{Game, GameCallback, GameUpdate};
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
 use starkwaves_client::types::environment::Environment;
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
+use std::process::exit;
 use std::sync::Arc;
+
 
 #[derive(Parser, Debug)]
 #[command(name = "starkwaves")]
@@ -15,11 +16,15 @@ use std::sync::Arc;
 struct Args {
     /// Player's private key (hex format, with or without 0x prefix)
     #[arg(short = 'k', long)]
-    private_key: String,
+    private_key: Option<String>,
 
     /// Player's account address (hex format, with or without 0x prefix)
     #[arg(short = 'a', long)]
-    address: String,
+    address: Option<String>,
+
+    /// Use a hardcoded preset player: A or B
+    #[arg(short = 'p', long)]
+    preset: Option<String>,
 }
 
 #[tokio::main]
@@ -28,19 +33,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = Args::parse();
 
-    let private_key = Felt::from_hex(&args.private_key)
-        .expect("Invalid private key format");
-    let address = Felt::from_hex(&args.address)
-        .expect("Invalid address format");
-
     let env = Environment::new();
 
     let rpc_provider = env.rpc_provider();
-    let player = env.player(private_key, address, &rpc_provider);
+
+    let player = env.player(
+        args.preset.as_deref(),
+        args.private_key.as_deref(),
+        args.address.as_deref(),
+        &rpc_provider,
+    );
 
     let print_callback = PrintCallback;
 
-    // Game::join now returns Arc<Mutex<Game>> and handles event subscription internally
     let game = Game::join(
         env.contract_address,
         env.ws_url,
@@ -66,39 +71,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
 
-        match parts.as_slice() {
-            ["place", ship_type, x, y, orientation] => {
-                let kind = ShipKind::try_from(*ship_type)?;
-                let x: u8 = x.parse()?;
-                let y: u8 = y.parse()?;
-                let orientation = Orientation::try_from(*orientation)?;
+        if let Err(e) = async {
+            match parts.as_slice() {
+                ["place", ship_type, x, y, orientation] => {
+                    let kind = ShipKind::try_from(*ship_type)?;
+                    let x: u8 = x.parse()?;
+                    let y: u8 = y.parse()?;
+                    let orientation = Orientation::try_from(*orientation)?;
 
-                let ship = Ship::new(kind, x, y, orientation);
+                    let ship = Ship::new(kind, x, y, orientation);
 
-                let mut game = game.lock().await;
-                game.place_ship(ship).await?;
-            }
-            ["attack", x, y] => {
-                let x: u8 = x.parse()?;
-                let y: u8 = y.parse()?;
+                    let mut game = game.lock().await;
+                    game.place_ship(ship).await?;
+                }
+                ["attack", x, y] => {
+                    let x: u8 = x.parse()?;
+                    let y: u8 = y.parse()?;
 
-                let mut game = game.lock().await;
-                game.attack(x, y).await?;
+                    let mut game = game.lock().await;
+                    game.attack(x, y).await?;
+                }
+                ["boards"] => {
+                    let game = game.lock().await;
+                    let board = game.board()?;
+                    println!("{}", board);
+                    println!("{}", board.launched_fire_view());
+                }
+                ["quit"] => {
+                    println!("Exiting...");
+                    exit(0);
+                }
+                _ => {
+                    println!("Commands:");
+                    println!("\t- place <type> <x> <y> <h|v>");
+                    println!("\t- attack <x> <y>");
+                    println!("\t- boards");
+                    println!("\t- quit");
+                }
             }
-            ["quit"] => {
-                println!("Exiting...");
-                break;
-            }
-            _ => {
-                println!("Commands:");
-                println!("\t- place <type> <x> <y> <h|v>");
-                println!("\t- attack <x> <y>");
-                println!("\t- quit");
-            }
+
+            Ok::<_, Box<dyn std::error::Error>>(())
+        }.await {
+            eprintln!("Error: {}", e);
         }
     }
-
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -111,8 +127,18 @@ impl GameCallback for PrintCallback {
             GameUpdate::OpponentJoined { opponent } => {
                 println!("Opponent joined {:#x}. Place your ships.", opponent.0);
             }
-            GameUpdate::GameStarted { first_attacker } => {
-                println!("Game started! First attacker: {:#x}", first_attacker.0);
+            GameUpdate::ShipsPlaced => {
+                println!("Ships placed. Committing board...");
+            }
+            GameUpdate::BoardCommitted => {
+                println!("BoardCommitted.");
+            }
+            GameUpdate::GameStarted { your_turn } => {
+                if your_turn {
+                    println!("Game started! Your turn to attack.");
+                } else {
+                    println!("Game started! Opponent's turn to attack.");
+                }
             }
             GameUpdate::IncomingAttack { x, y } => {
                 println!("Incoming attack at ({}, {})", x, y);

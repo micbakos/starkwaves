@@ -1,9 +1,10 @@
 use crate::types::board_size::BoardSize;
 use crate::types::contract::mappings::{in_game_event_keys, in_lobby_event_keys, IntoEvents};
 use crate::types::contract::starkwaves::Starkwaves;
-use crate::types::contract::starkwaves::{Event, Outcome};
+use crate::types::contract::starkwaves::Event;
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
+use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
 use crate::types::result::Result;
 use crate::types::{Board, Ship};
@@ -25,13 +26,16 @@ use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use url::Url;
-use crate::types::game_over_outcome::GameOverOutcome;
 
 #[derive(Debug, Clone)]
 pub enum GameUpdate {
     OpponentJoined { opponent: ContractAddress },
+
+    ShipsPlaced,
+
+    BoardCommitted,
     /// Game has started, contains the address of the player who attacks first
-    GameStarted { first_attacker: ContractAddress },
+    GameStarted { your_turn: bool },
     /// You need to defend against an attack at the given position
     IncomingAttack { x: u8, y: u8 },
     /// Your attack result
@@ -191,13 +195,16 @@ where
     }
 
     pub async fn place_ship(&mut self, ship: Ship) -> Result<()> {
+        let callback = self.callback.clone();
         let commit_info = {
             let salt = self.salt;
             let game_data = self.in_game_data()?;
             game_data.board.place_ship(ship)?;
 
             if game_data.board.is_board_ready() {
+                callback.on_update(GameUpdate::ShipsPlaced).await;
                 let root = game_data.board.commit(salt)?;
+                callback.on_update(GameUpdate::BoardCommitted).await;
                 let game_id = game_data.game_id;
                 Some((root, game_id))
             } else {
@@ -242,6 +249,7 @@ where
             .map_err(|e| e.into())?;
 
         let game_data = self.in_game_data()?;
+        game_data.board.track_launched_fire(x, y);
         game_data.state = InGameState::Playing(PlayTurn {
             attacking_player: player_address,
             current_attack: Some((x, y)),
@@ -324,6 +332,11 @@ where
         }
     }
 
+    pub fn board(&self) -> Result<Board> {
+        let state = &self.state.as_in_game().ok_or(GameError::GameNotStarted)?;
+        Ok(state.board.clone())
+    }
+
     fn in_game_data(&mut self) -> Result<&mut GameData> {
         self.state.as_in_game_mut().ok_or(GameError::GameNotStarted)
     }
@@ -365,7 +378,7 @@ where
                         .expect("EmittedEvent should be converted to GameEvent");
 
                     if let Event::PlayersAssembled(event) = game_event.clone() {
-                        if (board_size != event.board_size.into()) {
+                        if board_size != event.board_size.into() {
                             continue;
                         }
 
@@ -509,7 +522,7 @@ where
                 });
 
                 callback.on_update(GameUpdate::GameStarted {
-                    first_attacker: event.attacker,
+                    your_turn: event.attacker == self.player_address(),
                 }).await;
             }
             Event::Attack(event) => {

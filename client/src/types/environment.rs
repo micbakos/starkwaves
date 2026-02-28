@@ -9,11 +9,25 @@ use std::env;
 use url::Url;
 
 #[derive(Debug, Clone)]
+pub struct PlayerPreset {
+    pub private_key: Felt,
+    pub address: Felt,
+}
+
+#[derive(Debug, Clone)]
 pub struct Environment {
     rpc_url: Url,
     pub ws_url: Url,
     chain_id: Felt,
-    pub contract_address: Felt
+    pub contract_address: Felt,
+    preset_a: Option<PlayerPreset>,
+    preset_b: Option<PlayerPreset>,
+}
+
+fn read_player_preset(key_var: &str, addr_var: &str) -> Option<PlayerPreset> {
+    let private_key = Felt::from_hex(&env::var(key_var).ok()?).ok()?;
+    let address = Felt::from_hex(&env::var(addr_var).ok()?).ok()?;
+    Some(PlayerPreset { private_key, address })
 }
 
 impl Environment {
@@ -36,6 +50,8 @@ impl Environment {
             ws_url: Url::parse(ws_url_str.as_str()).expect("Invalid WS_URL"),
             chain_id: cairo_short_string_to_felt(chain_id_str.as_str()).expect("Invalid CHAIN_ID"),
             contract_address,
+            preset_a: read_player_preset("PRESET_A_PRIVATE_KEY", "PRESET_A_ADDRESS"),
+            preset_b: read_player_preset("PRESET_B_PRIVATE_KEY", "PRESET_B_ADDRESS"),
         }
     }
 
@@ -45,10 +61,30 @@ impl Environment {
 
     pub fn player(
         &self,
-        private_key: Felt,
-        address: Felt,
+        preset: Option<&str>,
+        private_key: Option<&str>,
+        address: Option<&str>,
         provider: &JsonRpcClient<HttpTransport>,
     ) -> SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet> {
+        let (private_key, address) = match preset {
+            Some("A") | Some("a") => {
+                let p = self.preset_a.as_ref().expect("PRESET_A_PRIVATE_KEY / PRESET_A_ADDRESS not set");
+                (p.private_key, p.address)
+            }
+            Some("B") | Some("b") => {
+                let p = self.preset_b.as_ref().expect("PRESET_B_PRIVATE_KEY / PRESET_B_ADDRESS not set");
+                (p.private_key, p.address)
+            }
+            Some(other) => panic!("Unknown preset '{}'. Valid values: A, B", other),
+            None => {
+                let private_key = Felt::from_hex(private_key.expect("--private-key required when --preset is not set"))
+                    .expect("Invalid private key format");
+                let address = Felt::from_hex(address.expect("--address required when --preset is not set"))
+                    .expect("Invalid address format");
+                (private_key, address)
+            }
+        };
+
         let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
 
         SingleOwnerAccount::new(

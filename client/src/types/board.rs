@@ -16,7 +16,8 @@ pub struct Board {
     size: BoardSize,
     ships: Vec<Ship>,
     commitment_tree: Option<BoardMerkleTree>,
-    bombs: Vec<usize>,
+    received_fire: Vec<usize>,
+    launched_fire: Vec<usize>,
 }
 
 impl Board {
@@ -25,7 +26,8 @@ impl Board {
             size,
             ships: Vec::new(),
             commitment_tree: None,
-            bombs: Vec::new(),
+            received_fire: Vec::new(),
+            launched_fire: Vec::new(),
         }
     }
 
@@ -122,7 +124,7 @@ impl Board {
     pub fn receive_fire(&mut self, x: u8, y: u8) -> Result<FireReport> {
         let offset = self.to_offset(x, y);
         if self
-            .bombs
+            .received_fire
             .iter()
             .cloned()
             .find(|index| *index == offset)
@@ -170,7 +172,7 @@ impl Board {
             }
         };
 
-        self.bombs.push(offset);
+        self.received_fire.push(offset);
 
         Ok(report)
     }
@@ -235,11 +237,16 @@ impl Board {
         cells
     }
 
+    pub fn track_launched_fire(&mut self, x: u8, y: u8) {
+        let offset = self.to_offset(x, y);
+        self.launched_fire.push(offset);
+    }
+
     fn hit_ships(&mut self) -> HashMap<Uuid, u8> {
         let mut hits = HashMap::<Uuid, u8>::new();
         let cells = self.cells();
 
-        self.bombs.iter().for_each(|index| {
+        self.received_fire.iter().for_each(|index| {
             let cell = cells[*index];
             if let Cell::Ship(ship_id) = cell {
                 let bomb_count = hits.get(&ship_id).unwrap_or(&0);
@@ -263,107 +270,123 @@ impl Default for Board {
     }
 }
 
+fn format_board_row(size: usize, items: &[&str], index: Option<usize>, bombed: &[bool]) -> String {
+    let sanitize = |text: &str| {
+        if text.len() != 2 && text.len() != 4 {
+            panic!("Each text on grid should be 2 or 4 chars. Was `{}`.", text);
+        }
+        if text.len() == 2 {
+            format!("  {}  ", text)
+        } else {
+            format!(" {} ", text)
+        }
+    };
+
+    if items.len() > size {
+        panic!("Items to draw should be at most {}", size);
+    }
+
+    let mut row = String::from("|");
+    match index {
+        None => row.push_str("      |"),
+        Some(i) => {
+            let label = if i + 1 < 10 {
+                format!("0{}", i + 1)
+            } else {
+                (i + 1).to_string()
+            };
+            row = format!("{row}{}|", sanitize(&label));
+        }
+    }
+    for i in 0..size {
+        let cell = sanitize(items[i]);
+        if bombed.get(i).copied().unwrap_or(false) {
+            row = format!("{}\x1b[31m{}\x1b[0m|", row, cell);
+        } else {
+            row = format!("{}{}|", row, cell);
+        }
+    }
+    row
+}
+
+fn write_board_grid(
+    f: &mut fmt::Formatter<'_>,
+    size: usize,
+    rows: &[Vec<String>],
+    fired: &[usize],
+) -> fmt::Result {
+    let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
+    let column_titles = (1..=size)
+        .map(|i| if i < 10 { format!("0{i}") } else { format!("{i}") })
+        .collect::<Vec<_>>();
+
+    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[]))?;
+    writeln!(f, "{}", format_board_row(
+        size,
+        column_titles.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
+        None,
+        &[],
+    ))?;
+
+    for (row_idx, row_cells) in rows.iter().enumerate() {
+        let bombed_cols: Vec<bool> = (0..size)
+            .map(|col_idx| fired.contains(&(row_idx * size + col_idx)))
+            .collect();
+
+        writeln!(f, "{}", format_board_row(
+            size,
+            row_cells.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
+            Some(row_idx),
+            &bombed_cols,
+        ))?;
+    }
+
+    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[]))?;
+    Ok(())
+}
+
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let size = self.size.size() as usize;
-        let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
-        let row = |items: &[&str], index: Option<usize>| -> String {
-            let sanitize = |text: &str| {
-                if text.len() != 2 && text.len() != 4 {
-                    panic!("Each text on grid should be 2 or 4 chars. Was `{}`.", &text);
-                }
-
-                if text.len() == 2 {
-                    return format!("  {}  ", text);
-                }
-
-                return format!(" {} ", text);
-            };
-
-            if items.len() > size {
-                panic!("Items to draw should be at most {}", size)
-            }
-
-            let mut row = String::from("|");
-            match index {
-                None => {
-                    row.push_str("      |");
-                }
-                Some(index) => {
-                    let index = index + 1;
-                    let index_formatted = if index < 10 {
-                        format!("0{index}")
-                    } else {
-                        index.to_string()
-                    };
-
-                    row = format!("{row}{}|", sanitize(index_formatted.as_str()));
-                }
-            }
-            for i in 0..size {
-                row = format!("{}{}|", row, sanitize(items[i]));
-            }
-            return row;
-        };
-
-        let column_titles = (1..size + 1)
-            .map(|i| {
-                if i < 10 {
-                    format!("0{i}")
-                } else {
-                    format!("{i}")
-                }
-            })
-            .collect::<Vec<_>>();
-
-        writeln!(f, "{}", row(divider_items.as_slice(), None))?;
-        writeln!(
-            f,
-            "{}",
-            row(
-                column_titles
-                    .iter()
-                    .map(|i| i.as_str())
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-                None
-            )
-        )?;
         let cells = self.cells();
-        let rows = cells.chunks(size).collect::<Vec<_>>();
-        for (index, cells) in rows.iter().enumerate() {
-            let cells_formatted = cells
-                .into_iter()
-                .map(|cell| match cell {
+        let rows: Vec<Vec<String>> = cells
+            .chunks(size)
+            .map(|chunk| {
+                chunk.iter().map(|cell| match cell {
                     Cell::Water => "~~".to_string(),
                     Cell::Ship(ship_id) => {
                         let ship = self
                             .ships
                             .iter()
-                            .find(|ship| ship.id.as_bytes() == ship_id.as_bytes())
-                            .expect(
-                                format!("Ship id {} should exist but not found.", ship_id).as_str(),
-                            );
-                        format!("{}", ship.kind.code()).to_string()
+                            .find(|s| s.id.as_bytes() == ship_id.as_bytes())
+                            .expect(&format!("Ship id {} should exist but not found.", ship_id));
+                        ship.kind.code().to_string()
                     }
-                })
-                .collect::<Vec<_>>();
+                }).collect()
+            })
+            .collect();
 
-            writeln!(
-                f,
-                "{}",
-                row(
-                    cells_formatted
-                        .iter()
-                        .map(|cell| cell.as_str())
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    Some(index)
-                )
-            )?;
-        }
-        writeln!(f, "{}", row(divider_items.as_slice(), None))?;
-        Ok(())
+        write_board_grid(f, size, &rows, &self.received_fire)
+    }
+}
+
+pub struct LaunchedFireView<'a>(&'a Board);
+
+impl Board {
+    pub fn launched_fire_view(&self) -> LaunchedFireView<'_> {
+        LaunchedFireView(self)
+    }
+}
+
+impl fmt::Display for LaunchedFireView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let board = self.0;
+        let size = board.size.size() as usize;
+        let rows: Vec<Vec<String>> = (0..size)
+            .map(|_| (0..size).map(|_| "??".to_string()).collect())
+            .collect();
+
+        write_board_grid(f, size, &rows, &board.launched_fire)
     }
 }
 
@@ -926,7 +949,7 @@ mod tests {
     // ===== Fire and Hit Tests =====
 
     #[test]
-    fn test_hit_ships_no_bombs() {
+    fn test_hit_ships_no_received_fire() {
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         board
             .place_ship(Ship::new(
@@ -947,7 +970,7 @@ mod tests {
         assert_eq!(
             hits.len(),
             0,
-            "No ships should be hit when no bombs have been dropped"
+            "No ships should be hit when no fire has been received"
         );
     }
 
