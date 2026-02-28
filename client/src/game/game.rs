@@ -249,7 +249,6 @@ where
             .map_err(|e| e.into())?;
 
         let game_data = self.in_game_data()?;
-        game_data.board.track_launched_fire(x, y);
         game_data.state = InGameState::Playing(PlayTurn {
             attacking_player: player_address,
             current_attack: Some((x, y)),
@@ -542,20 +541,21 @@ where
             }
             Event::AttackResult(event) => {
                 let callback = self.callback.clone();
+                let hit = event.ship_kind.is_some();
 
                 if event.attacker == self.player_address() {
+                    self.in_game_data().unwrap().board.track_launched_fire(event.x, event.y, hit);
                     callback.on_update(GameUpdate::AttackResult {
                         x: event.x,
                         y: event.y,
-                        hit: event.ship_kind.is_some(),
+                        hit,
                     }).await;
-                } else if event.ship_kind.is_some() {
+                } else if hit {
                     callback.on_update(GameUpdate::YouWereHit {
                         x: event.x,
                         y: event.y,
                     }).await;
                 }
-
             }
             Event::GameRevealRequest(_) => {
                 self.reveal().await.unwrap();

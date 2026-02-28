@@ -94,8 +94,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ["boards"] => {
                     let game = game.lock().await;
                     let board = game.board()?;
-                    println!("{}", board);
                     println!("{}", board.launched_fire_view());
+                    println!();
+                    println!("{}", board);
                 }
                 ["quit"] => {
                     println!("Exiting...");

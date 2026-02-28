@@ -12,12 +12,18 @@ use std::fmt;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchedFire {
+    pub offset: usize,
+    pub hit: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     size: BoardSize,
     ships: Vec<Ship>,
     commitment_tree: Option<BoardMerkleTree>,
     received_fire: Vec<usize>,
-    launched_fire: Vec<usize>,
+    launched_fire: Vec<LaunchedFire>,
 }
 
 impl Board {
@@ -237,9 +243,9 @@ impl Board {
         cells
     }
 
-    pub fn track_launched_fire(&mut self, x: u8, y: u8) {
+    pub fn track_launched_fire(&mut self, x: u8, y: u8, hit: bool) {
         let offset = self.to_offset(x, y);
-        self.launched_fire.push(offset);
+        self.launched_fire.push(LaunchedFire { offset, hit });
     }
 
     fn hit_ships(&mut self) -> HashMap<Uuid, u8> {
@@ -270,7 +276,7 @@ impl Default for Board {
     }
 }
 
-fn format_board_row(size: usize, items: &[&str], index: Option<usize>, bombed: &[bool]) -> String {
+fn format_board_row(size: usize, items: &[&str], index: Option<usize>, hits: &[bool], misses: &[bool]) -> String {
     let sanitize = |text: &str| {
         if text.len() != 2 && text.len() != 4 {
             panic!("Each text on grid should be 2 or 4 chars. Was `{}`.", text);
@@ -300,8 +306,10 @@ fn format_board_row(size: usize, items: &[&str], index: Option<usize>, bombed: &
     }
     for i in 0..size {
         let cell = sanitize(items[i]);
-        if bombed.get(i).copied().unwrap_or(false) {
+        if hits.get(i).copied().unwrap_or(false) {
             row = format!("{}\x1b[31m{}\x1b[0m|", row, cell);
+        } else if misses.get(i).copied().unwrap_or(false) {
+            row = format!("{}\x1b[33m{}\x1b[0m|", row, cell);
         } else {
             row = format!("{}{}|", row, cell);
         }
@@ -313,35 +321,41 @@ fn write_board_grid(
     f: &mut fmt::Formatter<'_>,
     size: usize,
     rows: &[Vec<String>],
-    fired: &[usize],
+    hits: &[usize],
+    misses: &[usize],
 ) -> fmt::Result {
     let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
     let column_titles = (1..=size)
         .map(|i| if i < 10 { format!("0{i}") } else { format!("{i}") })
         .collect::<Vec<_>>();
 
-    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[]))?;
+    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[], &[]))?;
     writeln!(f, "{}", format_board_row(
         size,
         column_titles.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
         None,
         &[],
+        &[],
     ))?;
 
     for (row_idx, row_cells) in rows.iter().enumerate() {
-        let bombed_cols: Vec<bool> = (0..size)
-            .map(|col_idx| fired.contains(&(row_idx * size + col_idx)))
+        let hit_cols: Vec<bool> = (0..size)
+            .map(|col| hits.contains(&(row_idx * size + col)))
+            .collect();
+        let miss_cols: Vec<bool> = (0..size)
+            .map(|col| misses.contains(&(row_idx * size + col)))
             .collect();
 
         writeln!(f, "{}", format_board_row(
             size,
             row_cells.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
             Some(row_idx),
-            &bombed_cols,
+            &hit_cols,
+            &miss_cols,
         ))?;
     }
 
-    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[]))?;
+    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[], &[]))?;
     Ok(())
 }
 
@@ -366,7 +380,7 @@ impl fmt::Display for Board {
             })
             .collect();
 
-        write_board_grid(f, size, &rows, &self.received_fire)
+        write_board_grid(f, size, &rows, &self.received_fire, &[])
     }
 }
 
@@ -382,11 +396,24 @@ impl fmt::Display for LaunchedFireView<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let board = self.0;
         let size = board.size.size() as usize;
+
+        let hit_offsets: Vec<usize> = board.launched_fire.iter().filter(|s| s.hit).map(|s| s.offset).collect();
+        let miss_offsets: Vec<usize> = board.launched_fire.iter().filter(|s| !s.hit).map(|s| s.offset).collect();
+
         let rows: Vec<Vec<String>> = (0..size)
-            .map(|_| (0..size).map(|_| "??".to_string()).collect())
+            .map(|row_idx| {
+                (0..size).map(|col_idx| {
+                    let flat_idx = row_idx * size + col_idx;
+                    if let Some(shot) = board.launched_fire.iter().find(|s| s.offset == flat_idx) {
+                        if shot.hit { "XX".to_string() } else { "**".to_string() }
+                    } else {
+                        "~~".to_string()
+                    }
+                }).collect()
+            })
             .collect();
 
-        write_board_grid(f, size, &rows, &board.launched_fire)
+        write_board_grid(f, size, &rows, &hit_offsets, &miss_offsets)
     }
 }
 
