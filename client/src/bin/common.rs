@@ -1,11 +1,23 @@
+use dotenv::dotenv;
+use serde_json::Value;
+use starknet::accounts::{ExecutionEncoding, SingleOwnerAccount};
+use starknet::core::types::contract::{CompiledClass, SierraClass};
+use starknet::core::types::{Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo};
+use starknet::providers::jsonrpc::HttpTransport;
+use starknet::providers::{JsonRpcClient, Provider};
+use starknet::signers::{LocalWallet, SigningKey};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use dotenv::dotenv;
-use serde_json::Value;
+use std::time::Duration;
+use tokio::time::sleep;
+use url::Url;
 
 pub const CONTRACT_PATH: &str = "../contract";
+const CONTRACT_FILE_NAME: &str = "starkwaves_Starkwaves";
+const COMPILED_CONTRACT_SUFFIX: &str = "compiled_contract_class.json";
+const SIERRA_CONTRACT_SUFFIX: &str = "contract_class.json";
 
 #[derive(Debug)]
 pub struct Config {
@@ -13,23 +25,24 @@ pub struct Config {
     pub rpc_url: String,
     pub account_name: String,
     pub account_address: String,
+    pub account_private_key: String,
     pub contract_address: Option<String>,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         dotenv().ok();
-        let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
+        let preset =
+            env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
         let env_path = PathBuf::from(format!("../.env.{}", preset));
         dotenv::from_filename(env_path.as_path()).ok();
 
-        let rpc_url = env::var("DEPLOY_RPC_URL")
-            .map_err(|_| "DEPLOY_RPC_URL must be set")?;
+        let rpc_url = env::var("DEPLOY_RPC_URL").map_err(|_| "DEPLOY_RPC_URL must be set")?;
 
-        let account_name = env::var("DEPLOY_ACCOUNT_NAME")
-            .map_err(|_| "DEPLOY_ACCOUNT_NAME must be set")?;
+        let account_name =
+            env::var("DEPLOY_ACCOUNT_NAME").map_err(|_| "DEPLOY_ACCOUNT_NAME must be set")?;
 
-        let account_address = Self::get_account_address(&account_name)?;
+        let (account_address, account_private_key) = Self::get_account_details(&account_name)?;
 
         let contract_address = env::var("CONTRACT_ADDR").ok();
 
@@ -46,8 +59,25 @@ impl Config {
             rpc_url,
             account_name,
             account_address,
+            account_private_key,
             contract_address,
         })
+    }
+
+    pub fn artifacts(
+        is_release: bool,
+    ) -> Result<(SierraClass, CompiledClass), Box<dyn std::error::Error>> {
+        let build_type = if is_release { "release" } else { "dev" };
+
+        let directory = PathBuf::from(CONTRACT_PATH).join("target").join(build_type);
+        let sierra_file_path = directory
+            .join(format!("{}.{}", CONTRACT_FILE_NAME, SIERRA_CONTRACT_SUFFIX));
+        let compiled_file_path = directory
+            .join(format!("{}.{}", CONTRACT_FILE_NAME, COMPILED_CONTRACT_SUFFIX));
+
+        let sierra: SierraClass = serde_json::from_str(&fs::read_to_string(sierra_file_path)?)?;
+        let casm: CompiledClass = serde_json::from_str(&fs::read_to_string(compiled_file_path)?)?;
+        Ok((sierra, casm))
     }
 
     pub fn contract_address(&self) -> Result<&str, Box<dyn std::error::Error>> {
@@ -60,7 +90,39 @@ impl Config {
         self.env_path.as_path()
     }
 
-    fn get_account_address(account_name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn provider(&self) -> JsonRpcClient<HttpTransport> {
+        JsonRpcClient::new(HttpTransport::new(
+            Url::parse(self.rpc_url.as_str()).unwrap(),
+        ))
+    }
+
+    pub async fn deployer_account(
+        &self,
+        provider: JsonRpcClient<HttpTransport>,
+    ) -> Result<
+        SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>,
+        Box<dyn std::error::Error>,
+    > {
+        let chain_id = provider.chain_id().await?;
+
+        let signer = LocalWallet::from(SigningKey::from_secret_scalar(Felt::from_hex(
+            self.account_private_key.as_str(),
+        )?));
+
+        let account = SingleOwnerAccount::new(
+            provider,
+            signer,
+            Felt::from_hex(self.account_address.as_str())?,
+            chain_id,
+            ExecutionEncoding::New,
+        );
+
+        Ok(account)
+    }
+
+    fn get_account_details(
+        account_name: &str,
+    ) -> Result<(String, String), Box<dyn std::error::Error>> {
         let accounts_path = dirs::home_dir()
             .ok_or("Could not find home directory")?
             .join(".starknet_accounts/starknet_open_zeppelin_accounts.json");
@@ -70,8 +132,12 @@ impl Config {
 
         for (_network, network_accounts) in accounts.as_object().ok_or("Invalid accounts file")? {
             if let Some(account) = network_accounts.get(account_name) {
-                if let Some(address) = account.get("address").and_then(|a| a.as_str()) {
-                    return Ok(address.to_string());
+                let address = account.get("address").and_then(|a| a.as_str());
+                let private_key = account.get("private_key").and_then(|a| a.as_str());
+                if let Some(address) = address
+                    && let Some(private_key) = private_key
+                {
+                    return Ok((address.to_string(), private_key.to_string()));
                 }
             }
         }
@@ -92,6 +158,24 @@ pub fn check_sncast() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+pub async fn wait_for_tx(
+    provider: &JsonRpcClient<HttpTransport>,
+    tx_hash: Felt,
+) -> Result<TransactionReceiptWithBlockInfo, Box<dyn std::error::Error>> {
+    loop {
+        match provider.get_transaction_receipt(tx_hash).await {
+            Ok(receipt) => {
+                match receipt.receipt.finality_status() {
+                    TransactionFinalityStatus::AcceptedOnL2
+                    | TransactionFinalityStatus::AcceptedOnL1 => return Ok(receipt),
+                    _ => {}
+                }
+            }
+            Err(_) => {} // not yet known
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+}
 
 fn main() {
     // Does nothing

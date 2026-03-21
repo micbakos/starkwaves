@@ -1,164 +1,104 @@
 #[path = "common.rs"]
 mod common;
 
-use starknet::core::types::Felt;
+use crate::common::wait_for_tx;
+use common::{CONTRACT_PATH, Config, check_sncast};
+use starknet::accounts::{Account, AccountError, ConnectedAccount, SingleOwnerAccount};
+use starknet::contract::{ContractFactory, UdcSelector};
+use starknet::core::types::contract::SierraClass;
+use starknet::core::types::{
+    ContractExecutionError, Felt, StarknetError, TransactionExecutionErrorData,
+};
+use starknet::providers::jsonrpc::HttpTransport;
+use starknet::providers::{JsonRpcClient, Provider, ProviderError};
+use starknet::signers::LocalWallet;
 use std::fs;
+use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{exit, Command, Stdio};
+use std::process::{Command, Stdio, exit};
 use std::str::FromStr;
+use std::sync::Arc;
 
-use common::{check_sncast, Config, CONTRACT_PATH};
-
-fn build_contract() -> Result<(), Box<dyn std::error::Error>> {
+fn build_contract(is_release: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("Building contract...");
+
+    let mut args = vec![];
+    if is_release {
+        args.push("--release");
+    }
+    args.push("build");
 
     let output = Command::new("scarb")
         .current_dir(CONTRACT_PATH)
-        .args(["--release", "build"])
+        .args(&args)
         .output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("Scarb build failed:\nstdout: {}\nstderr: {}", stdout, stderr).into());
+        return Err(format!(
+            "Scarb build failed:\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        )
+        .into());
     }
 
     println!("Contract built successfully");
     Ok(())
 }
 
-fn declare_contract(config: &Config) -> Result<Felt, Box<dyn std::error::Error>> {
+async fn declare_contract(
+    is_release: bool,
+    account: &SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>,
+) -> Result<Felt, Box<dyn std::error::Error>> {
     println!("\nDeclaring contract...");
 
-    let mut class_hash = Felt::ZERO;
-    let declare_output = Command::new("sncast")
-        .current_dir(CONTRACT_PATH)
-        .args([
-            "--account", &config.account_name,
-            "--wait",
-            "declare",
-            "--url", &config.rpc_url,
-            "--contract-name", "Starkwaves",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()?;
-
-    let mut is_already_declared = false;
-    if !declare_output.stderr.is_empty() {
-        let err = String::from_utf8_lossy(&declare_output.stderr);
-        for line in err.lines() {
-            if line.starts_with("Error:") {
-                let reason = line.split(":").last().unwrap();
-                if reason.contains("hash is already declared") {
-                    is_already_declared = true;
-                    break;
-                }
-            }
+    let (sierra, casm) = Config::artifacts(is_release)?;
+    let class_hash = sierra.class_hash()?;
+    let flattened_sierra = Arc::new(sierra.flatten()?);
+    let result = match account
+        .declare_v3(flattened_sierra, casm.class_hash()?)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(AccountError::Provider(ProviderError::StarknetError(
+            StarknetError::TransactionExecutionError(TransactionExecutionErrorData {
+                execution_error: ContractExecutionError::Message(ref msg),
+                ..
+            }),
+        ))) if msg.contains("already declared") => {
+            println!("Contract already declared.");
+            return Ok(class_hash);
         }
+        Err(e) => return Err(e.into()),
+    };
 
-        if !is_already_declared {
-            eprintln!("Error: {}", err.trim());
-            exit(-1);
-        }
-    } else {
-        let out = String::from_utf8_lossy(&declare_output.stdout);
-        for line in out.lines() {
-            if line.starts_with("Class Hash:") {
-                let hash = line.split(":").last().unwrap();
-                class_hash = Felt::from_str(hash.trim())?;
-                break;
-            }
-        }
-    }
-
-    if is_already_declared {
-        println!("Contract already declared. Finding class hash...");
-        let utils_output = Command::new("sncast")
-            .current_dir(CONTRACT_PATH)
-            .args([
-                "utils",
-                "class-hash",
-                "--contract-name", "Starkwaves"
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
-
-        let stdout = String::from_utf8_lossy(&utils_output.stdout);
-        for line in stdout.lines() {
-            if line.starts_with("Class Hash:") {
-                let hash = line.split(":").last().unwrap();
-                class_hash = Felt::from_str(hash.trim())?;
-                break;
-            }
-        }
-
-        if class_hash == Felt::ZERO {
-            eprintln!("Error: Could not read class hash");
-            eprintln!("{:?}", utils_output);
-            exit(-1);
-        }
-    }
+    wait_for_tx(account.provider(), result.transaction_hash).await?;
 
     Ok(class_hash)
 }
 
-fn deploy_contract(config: &Config, class_hash: Felt, owner: &str) -> Result<Felt, Box<dyn std::error::Error>> {
+async fn deploy_contract(
+    class_hash: Felt,
+    account: &SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>,
+) -> Result<Felt, Box<dyn std::error::Error>> {
     println!("\nDeploying contract...");
-    println!("Owner: {}", owner);
+    println!("Owner: {:#x}", account.address());
 
-    let class_hash_str = format!("{:#x}", class_hash);
+    let factory = ContractFactory::new_with_udc(class_hash, account, UdcSelector::Legacy);
+    let deployment = factory.deploy_v3(vec![account.address()], Felt::ZERO, false);
+    let contract_address = deployment.deployed_address();
 
-    let mut child = Command::new("sncast")
-        .current_dir(CONTRACT_PATH)
-        .args([
-            "--account", &config.account_name,
-            "deploy",
-            "--url", &config.rpc_url,
-            "--class-hash", &class_hash_str,
-            "--arguments", owner,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let result = deployment.send().await?;
+    wait_for_tx(account.provider(), result.transaction_hash).await?;
 
-    let stdout = child.stdout.take().unwrap();
-    let reader = BufReader::new(stdout);
-
-    let mut contract_address: Option<Felt> = None;
-
-    for line in reader.lines() {
-        let line = line?;
-
-        if line.contains("Contract Address:") {
-            if let Some(addr_str) = line.split_whitespace().last() {
-                contract_address = Some(Felt::from_hex(addr_str)?);
-            }
-        }
-    }
-
-    let status = child.wait()?;
-
-    let stderr = child.stderr.take().unwrap();
-    let stderr_reader = BufReader::new(stderr);
-    for line in stderr_reader.lines() {
-        let line = line?;
-        if !line.is_empty() {
-            eprintln!("{}", line);
-        }
-    }
-
-    if !status.success() {
-        return Err("Deployment failed. Check the error above.".into());
-    }
-
-    contract_address.ok_or_else(|| "Could not parse contract address from sncast output".into())
+    Ok(contract_address)
 }
 
 fn update_env_file(
     config: &Config,
-    contract_address: Felt
+    contract_address: Felt,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let env_path = config.env_path();
 
@@ -192,15 +132,19 @@ fn update_env_file(
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    check_sncast()?;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
 
-    build_contract()?;
-    let class_hash = declare_contract(&config)?;
+    let is_release = true;
+    build_contract(is_release)?;
+    let provider = config.provider();
+    let account = config.deployer_account(provider).await?;
+
+    let class_hash = declare_contract(is_release, &account).await?;
     println!("Class Hash: {:#x}", class_hash);
 
-    let contract_address = deploy_contract(&config, class_hash, &config.account_address)?;
+    let contract_address = deploy_contract(class_hash, &account).await?;
     println!("Contract address: {:#x}", contract_address);
 
     update_env_file(&config, contract_address)?;
