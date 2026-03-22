@@ -1,7 +1,6 @@
 use dotenv::dotenv;
 use serde_json::Value;
 use starknet::accounts::{ExecutionEncoding, SingleOwnerAccount};
-use starknet::core::types::contract::{CompiledClass, SierraClass};
 use starknet::core::types::{Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo};
 use starknet::providers::jsonrpc::HttpTransport;
 use starknet::providers::{JsonRpcClient, Provider};
@@ -25,8 +24,9 @@ pub struct Config {
     pub rpc_url: String,
     pub account_name: String,
     pub account_address: String,
-    pub account_private_key: String,
+    pub account_private_key: Option<String>,
     pub contract_address: Option<String>,
+    pub use_sncast: bool,
 }
 
 impl Config {
@@ -42,12 +42,23 @@ impl Config {
         let account_name =
             env::var("DEPLOY_ACCOUNT_NAME").map_err(|_| "DEPLOY_ACCOUNT_NAME must be set")?;
 
-        let (account_address, account_private_key) = Self::get_account_details(&account_name)?;
+        let use_sncast = env::var("USE_SNCAST")
+            .map(|v| v.to_lowercase() == "true")
+            .unwrap_or(false);
+
+        let (account_address, account_private_key) = if use_sncast {
+            let address = Self::get_account_address(&account_name)?;
+            (address, None)
+        } else {
+            let (addr, pk) = Self::get_account_details(&account_name)?;
+            (addr, Some(pk))
+        };
 
         let contract_address = env::var("CONTRACT_ADDR").ok();
 
         println!("============================== Config ==============================");
         println!("Preset: {}", preset);
+        println!("Backend: {}", if use_sncast { "sncast" } else { "starknet-rs" });
         println!("Account: {:#}", account_address);
         if let Some(contract_address) = contract_address.clone() {
             println!("Starkwaves: {:#}", contract_address);
@@ -61,12 +72,14 @@ impl Config {
             account_address,
             account_private_key,
             contract_address,
+            use_sncast,
         })
     }
 
     pub fn artifacts(
         is_release: bool,
-    ) -> Result<(SierraClass, CompiledClass), Box<dyn std::error::Error>> {
+    ) -> Result<(starknet::core::types::contract::SierraClass, Felt), Box<dyn std::error::Error>>
+    {
         let build_type = if is_release { "release" } else { "dev" };
 
         let directory = PathBuf::from(CONTRACT_PATH).join("target").join(build_type);
@@ -75,9 +88,16 @@ impl Config {
         let compiled_file_path = directory
             .join(format!("{}.{}", CONTRACT_FILE_NAME, COMPILED_CONTRACT_SUFFIX));
 
-        let sierra: SierraClass = serde_json::from_str(&fs::read_to_string(sierra_file_path)?)?;
-        let casm: CompiledClass = serde_json::from_str(&fs::read_to_string(compiled_file_path)?)?;
-        Ok((sierra, casm))
+        println!("Sierra file: {}", sierra_file_path.to_string_lossy());
+        println!("CASM file: {}", compiled_file_path.to_string_lossy());
+
+        let sierra: starknet::core::types::contract::SierraClass =
+            serde_json::from_str(&fs::read_to_string(&sierra_file_path)?)?;
+        let casm: starknet::core::types::contract::CompiledClass =
+            serde_json::from_str(&fs::read_to_string(&compiled_file_path)?)?;
+
+        let casm_class_hash = casm.class_hash()?;
+        Ok((sierra, casm_class_hash))
     }
 
     pub fn contract_address(&self) -> Result<&str, Box<dyn std::error::Error>> {
@@ -103,11 +123,14 @@ impl Config {
         SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>,
         Box<dyn std::error::Error>,
     > {
+        let pk = self
+            .account_private_key
+            .as_ref()
+            .ok_or("account_private_key not loaded (USE_SNCAST=true?)")?;
+
         let chain_id = provider.chain_id().await?;
 
-        let signer = LocalWallet::from(SigningKey::from_secret_scalar(Felt::from_hex(
-            self.account_private_key.as_str(),
-        )?));
+        let signer = LocalWallet::from(SigningKey::from_secret_scalar(Felt::from_hex(pk)?));
 
         let account = SingleOwnerAccount::new(
             provider,
@@ -118,6 +141,25 @@ impl Config {
         );
 
         Ok(account)
+    }
+
+    fn get_account_address(account_name: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let accounts_path = dirs::home_dir()
+            .ok_or("Could not find home directory")?
+            .join(".starknet_accounts/starknet_open_zeppelin_accounts.json");
+
+        let content = fs::read_to_string(&accounts_path)?;
+        let accounts: Value = serde_json::from_str(&content)?;
+
+        for (_network, network_accounts) in accounts.as_object().ok_or("Invalid accounts file")? {
+            if let Some(account) = network_accounts.get(account_name) {
+                if let Some(address) = account.get("address").and_then(|a| a.as_str()) {
+                    return Ok(address.to_string());
+                }
+            }
+        }
+
+        Err(format!("Account '{}' not found", account_name).into())
     }
 
     fn get_account_details(
@@ -171,7 +213,7 @@ pub async fn wait_for_tx(
                     _ => {}
                 }
             }
-            Err(_) => {} // not yet known
+            Err(_) => {}
         }
         sleep(Duration::from_millis(500)).await;
     }
