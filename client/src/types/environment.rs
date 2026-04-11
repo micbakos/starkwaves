@@ -1,10 +1,10 @@
 use dotenv::dotenv;
-use starknet::accounts::{ExecutionEncoding, SingleOwnerAccount};
-use starknet::core::types::Felt;
-use starknet::core::utils::cairo_short_string_to_felt;
-use starknet::providers::jsonrpc::HttpTransport;
-use starknet::providers::JsonRpcClient;
-use starknet::signers::{LocalWallet, SigningKey};
+use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
+use starknet_rust::core::types::Felt;
+use starknet_rust::core::utils::cairo_short_string_to_felt;
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::providers::JsonRpcClient;
+use starknet_rust::signers::{LocalWallet, SigningKey};
 use std::env;
 use url::Url;
 
@@ -54,7 +54,7 @@ impl Environment {
             preset_b: read_player_preset("PRESET_B_PRIVATE_KEY", "PRESET_B_ADDRESS"),
         }
     }
-
+    
     pub fn rpc_provider(&self) -> JsonRpcClient<HttpTransport> {
         JsonRpcClient::new(HttpTransport::new(self.rpc_url.to_owned()))
     }

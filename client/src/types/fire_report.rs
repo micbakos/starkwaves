@@ -1,7 +1,7 @@
 use crate::types::{Ship, ShipKind};
 use std::fmt::{Display, Formatter};
-use starknet::core::crypto::pedersen_hash;
-use starknet::core::types::Felt;
+use starknet_rust::core::crypto::pedersen_hash;
+use starknet_rust::core::types::Felt;
 use crate::types::contract::starkwaves::FireStatus as SaltedFireStatus;
 
 #[derive(Debug)]

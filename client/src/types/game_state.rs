@@ -1,6 +1,6 @@
 use cainome::cairo_serde::ContractAddress;
 use enum_as_inner::EnumAsInner;
-use starknet::core::types::Felt;
+use starknet_rust::core::types::Felt;
 use crate::types::Board;
 use crate::types::board_size::BoardSize;
 
@@ -49,7 +49,7 @@ pub enum InGameState {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlayTurn {
     pub attacking_player: ContractAddress,
     pub current_attack: Option<(u8, u8)>

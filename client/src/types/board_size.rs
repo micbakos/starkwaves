@@ -1,7 +1,7 @@
 use crate::types::ShipKind;
 use derive_more::Display;
 use std::collections::HashSet;
-use starknet::core::codec::Encode;
+use starknet_rust::core::codec::Encode;
 use crate::types::contract::starkwaves;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]

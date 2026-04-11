@@ -1,0 +1,208 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Game (Preset A)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "starkwaves-client"
+                ],
+                "filter": {
+                    "name": "starkwaves-client",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--preset",
+                "A"
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Debug Game (Preset B)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "starkwaves-client"
+                ],
+                "filter": {
+                    "name": "starkwaves-client",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--preset",
+                "B"
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Debug Game (Custom Keys)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "starkwaves-client"
+                ],
+                "filter": {
+                    "name": "starkwaves-client",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--private-key",
+                "${input:privateKey}",
+                "--address",
+                "${input:address}"
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Run Game (Preset A)",
+            "type": "lldb",
+            "request": "launch",
+            "noDebug": true,
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "starkwaves-client"
+                ],
+                "filter": {
+                    "name": "starkwaves-client",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--preset",
+                "A"
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Run Game (Preset B)",
+            "type": "lldb",
+            "request": "launch",
+            "noDebug": true,
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "starkwaves-client"
+                ],
+                "filter": {
+                    "name": "starkwaves-client",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--preset",
+                "B"
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Deploy",
+            "type": "lldb",
+            "request": "launch",
+            "noDebug": true,
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "deploy"
+                ],
+                "filter": {
+                    "name": "deploy",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+        {
+            "name": "Reset",
+            "type": "lldb",
+            "request": "launch",
+            "noDebug": true,
+            "cargo": {
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/client/Cargo.toml",
+                    "--bin",
+                    "reset"
+                ],
+                "filter": {
+                    "name": "reset",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--game-id",
+                "${input:gameId}",
+            ],
+            "cwd": "${workspaceFolder}/client",
+            "env": {
+                "RUST_LOG": "debug"
+            }
+        },
+    ],
+    "inputs": [
+        {
+            "id": "privateKey",
+            "type": "promptString",
+            "description": "Player private key (hex)"
+        },
+        {
+            "id": "address",
+            "type": "promptString",
+            "description": "Player account address (hex)"
+        },
+        {
+            "id": "gameId",
+            "type": "promptString",
+            "description": "Game Id (decimal)",
+            "default": "1"
+        }
+    ]
+}

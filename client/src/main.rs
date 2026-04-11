@@ -4,11 +4,11 @@ use log::LevelFilter;
 use starkwaves_client::game::game::{Game, GameCallback, GameUpdate};
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
 use starkwaves_client::types::environment::Environment;
+use starkwaves_client::types::game_over_outcome::{GameOverOutcome, LossReason};
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
 use std::process::exit;
 use std::sync::Arc;
-
 
 #[derive(Parser, Debug)]
 #[command(name = "starkwaves")]
@@ -29,6 +29,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
     logger_init();
 
     let args = Args::parse();
@@ -65,9 +68,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
     let mut input = String::new();
+    let mut raw_input = Vec::new();
     loop {
         input.clear();
-        std::io::stdin().read_line(&mut input)?;
+        raw_input.clear();
+        use std::io::BufRead;
+        std::io::stdin().lock().read_until(b'\n', &mut raw_input)?;
+        input = String::from_utf8_lossy(&raw_input).into_owned();
 
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
 
@@ -97,7 +104,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", board.launched_fire_view());
                     println!();
                     println!("{}", board);
-                }
+                },
+                ["turn"] => {
+                    let game = game.lock().await;
+                    let turn = game.turn()?;
+
+                    if game.player_address() == turn.attacking_player {
+                        println!("It is your turn!");
+                    } else {
+                        println!("It is opponent's turn!");
+                    }
+                },
                 ["quit"] => {
                     println!("Exiting...");
                     exit(0);
@@ -158,7 +175,15 @@ impl GameCallback for PrintCallback {
                 println!("Board reveal requested");
             }
             GameUpdate::GameOver { outcome } => {
-                println!("Game over! Outcome: {:?}", outcome);
+                match outcome {
+                    GameOverOutcome::Won => println!("Game over, YOU WON!"),
+                    GameOverOutcome::Lost(reason) => {
+                        match reason {
+                            LossReason::FairGame => println!("Game over, You Lost :("),
+                            LossReason::FailedToProvideProof => println!("Game over, you failed to provide proof of your board"),
+                        }
+                    }
+                }
             }
         }
     }

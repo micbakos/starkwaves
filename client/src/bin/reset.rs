@@ -3,12 +3,12 @@ mod common;
 
 use common::{check_sncast, wait_for_tx, Config, CONTRACT_PATH};
 use log::error;
-use starknet::accounts::{Account, ConnectedAccount, SingleOwnerAccount};
-use starknet::core::types::{BlockId, BlockTag, Call, Felt, FunctionCall};
-use starknet::core::utils::get_selector_from_name;
-use starknet::providers::jsonrpc::HttpTransport;
-use starknet::providers::{JsonRpcClient, Provider};
-use starknet::signers::LocalWallet;
+use starknet_rust::accounts::{Account, ConnectedAccount, SingleOwnerAccount};
+use starknet_rust::core::types::{BlockId, BlockTag, Call, Felt, FunctionCall};
+use starknet_rust::core::utils::get_selector_from_name;
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::providers::{JsonRpcClient, Provider};
+use starknet_rust::signers::LocalWallet;
 use std::env;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};

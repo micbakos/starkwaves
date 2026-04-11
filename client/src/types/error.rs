@@ -1,12 +1,12 @@
-use starknet::accounts::AccountError;
-use starknet::core::types::{ContractExecutionError, StarknetError};
-use starknet::providers::ProviderError;
-use starknet_tokio_tungstenite::{SubscribeError, SubscriptionReceiveError};
+use starknet_rust::accounts::AccountError;
+use starknet_rust::core::types::{ContractExecutionError, StarknetError};
+use starknet_rust::providers::ProviderError;
 use crate::types::board_size::BoardSize;
 use crate::types::{Orientation, ShipKind};
 use thiserror::Error as ThisError;
 
-pub use starknet::core::codec::Error as CodecError;
+pub use starknet_rust::core::codec::Error as CodecError;
+use starknet_rust_tokio_tungstenite::{SubscribeError, SubscriptionReceiveError};
 
 #[derive(Clone, Debug, Eq, ThisError, PartialEq)]
 pub enum GameError {

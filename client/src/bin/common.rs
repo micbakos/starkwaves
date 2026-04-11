@@ -1,10 +1,10 @@
 use dotenv::dotenv;
 use serde_json::Value;
-use starknet::accounts::{ExecutionEncoding, SingleOwnerAccount};
-use starknet::core::types::{Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo};
-use starknet::providers::jsonrpc::HttpTransport;
-use starknet::providers::{JsonRpcClient, Provider};
-use starknet::signers::{LocalWallet, SigningKey};
+use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
+use starknet_rust::core::types::{Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo};
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::providers::{JsonRpcClient, Provider};
+use starknet_rust::signers::{LocalWallet, SigningKey};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -78,7 +78,7 @@ impl Config {
 
     pub fn artifacts(
         is_release: bool,
-    ) -> Result<(starknet::core::types::contract::SierraClass, Felt), Box<dyn std::error::Error>>
+    ) -> Result<(starknet_rust::core::types::contract::SierraClass, Felt), Box<dyn std::error::Error>>
     {
         let build_type = if is_release { "release" } else { "dev" };
 
@@ -91,9 +91,9 @@ impl Config {
         println!("Sierra file: {}", sierra_file_path.to_string_lossy());
         println!("CASM file: {}", compiled_file_path.to_string_lossy());
 
-        let sierra: starknet::core::types::contract::SierraClass =
+        let sierra: starknet_rust::core::types::contract::SierraClass =
             serde_json::from_str(&fs::read_to_string(&sierra_file_path)?)?;
-        let casm: starknet::core::types::contract::CompiledClass =
+        let casm: starknet_rust::core::types::contract::CompiledClass =
             serde_json::from_str(&fs::read_to_string(&compiled_file_path)?)?;
 
         let casm_class_hash = casm.class_hash()?;

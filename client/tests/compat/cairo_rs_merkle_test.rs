@@ -2,8 +2,8 @@
 mod tests {
     use crate::compat::cairo::cairo_runner::CairoRunner;
     use cairo_native::Value;
-    use starknet::core::crypto::pedersen_hash;
-    use starknet::core::types::Felt;
+    use starknet_rust::core::crypto::pedersen_hash;
+    use starknet_rust::core::types::Felt;
     use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
     use starkwaves_client::types::fire_report::FireStatus;
     use starkwaves_client::types::Board;

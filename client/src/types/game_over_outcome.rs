@@ -1,19 +1,34 @@
-use cainome::cairo_serde::ContractAddress;
 use crate::types::contract::starkwaves::Outcome;
+use cainome::cairo_serde::ContractAddress;
 
 #[derive(Debug, Clone)]
 pub enum GameOverOutcome {
-    Fair { winner: ContractAddress },
-    FailedToProvideProof { cheater: ContractAddress },
-    Null
+    Won,
+    Lost(LossReason),
 }
 
-impl From<Outcome> for GameOverOutcome {
-    fn from(value: Outcome) -> Self {
-        match value {
-            Outcome::Fair(winner) => Self::Fair { winner },
-            Outcome::FailedToProvideProof(cheater) => Self::FailedToProvideProof { cheater },
-            Outcome::Null => Self::Null,
+#[derive(Debug, Clone)]
+pub enum LossReason {
+    FairGame,
+    FailedToProvideProof,
+}
+
+impl GameOverOutcome {
+    pub fn from(outcome: Outcome, player_address: ContractAddress) -> Self {
+        match outcome {
+            Outcome::Fair(winner) => {
+                if winner == player_address {
+                    GameOverOutcome::Won
+                } else {
+                    GameOverOutcome::Lost(LossReason::FairGame)
+                }
+            }
+            Outcome::FailedToProvideProof(_) => {
+                GameOverOutcome::Lost(LossReason::FailedToProvideProof)
+            }
+            Outcome::Null => {
+                GameOverOutcome::Lost(LossReason::FailedToProvideProof)
+            }
         }
     }
 }

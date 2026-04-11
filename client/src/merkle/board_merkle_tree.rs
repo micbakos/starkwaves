@@ -1,7 +1,7 @@
 use crate::merkle::pedersen_hasher::PedersenHasher;
 use rs_merkle::MerkleTree;
-use starknet::core::crypto::pedersen_hash;
-use starknet::core::types::Felt;
+use starknet_rust::core::crypto::pedersen_hash;
+use starknet_rust::core::types::Felt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoardMerkleTree {

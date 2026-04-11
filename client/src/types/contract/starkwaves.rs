@@ -5,67 +5,69 @@
 #![allow(clippy::all)]
 #![allow(warnings)]
 
+use starknet_rust_core::types::Call;
+
 #[derive()]
-pub struct Starkwaves<A: starknet::accounts::ConnectedAccount + Sync> {
-    pub address: starknet::core::types::Felt,
+pub struct Starkwaves<A: starknet_rust::accounts::ConnectedAccount + Sync> {
+    pub address: starknet_rust::core::types::Felt,
     pub account: A,
-    pub block_id: starknet::core::types::BlockId,
+    pub block_id: starknet_rust::core::types::BlockId,
 }
-impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
-    pub fn new(address: starknet::core::types::Felt, account: A) -> Self {
+impl<A: starknet_rust::accounts::ConnectedAccount + Sync> Starkwaves<A> {
+    pub fn new(address: starknet_rust::core::types::Felt, account: A) -> Self {
         Self {
             address,
             account,
-            block_id: starknet::core::types::BlockId::Tag(
-                starknet::core::types::BlockTag::PreConfirmed,
+            block_id: starknet_rust::core::types::BlockId::Tag(
+                starknet_rust::core::types::BlockTag::PreConfirmed,
             ),
         }
     }
-    pub fn set_contract_address(&mut self, address: starknet::core::types::Felt) {
+    pub fn set_contract_address(&mut self, address: starknet_rust::core::types::Felt) {
         self.address = address;
     }
     pub fn provider(&self) -> &A::Provider {
         self.account.provider()
     }
-    pub fn set_block(&mut self, block_id: starknet::core::types::BlockId) {
+    pub fn set_block(&mut self, block_id: starknet_rust::core::types::BlockId) {
         self.block_id = block_id;
     }
-    pub fn with_block(self, block_id: starknet::core::types::BlockId) -> Self {
+    pub fn with_block(self, block_id: starknet_rust::core::types::BlockId) -> Self {
         Self { block_id, ..self }
     }
 }
 #[derive()]
-pub struct StarkwavesReader<P: starknet::providers::Provider + Sync> {
-    pub address: starknet::core::types::Felt,
+pub struct StarkwavesReader<P: starknet_rust::providers::Provider + Sync> {
+    pub address: starknet_rust::core::types::Felt,
     pub provider: P,
-    pub block_id: starknet::core::types::BlockId,
+    pub block_id: starknet_rust::core::types::BlockId,
 }
-impl<P: starknet::providers::Provider + Sync> StarkwavesReader<P> {
-    pub fn new(address: starknet::core::types::Felt, provider: P) -> Self {
+impl<P: starknet_rust::providers::Provider + Sync> StarkwavesReader<P> {
+    pub fn new(address: starknet_rust::core::types::Felt, provider: P) -> Self {
         Self {
             address,
             provider,
-            block_id: starknet::core::types::BlockId::Tag(
-                starknet::core::types::BlockTag::PreConfirmed,
+            block_id: starknet_rust::core::types::BlockId::Tag(
+                starknet_rust::core::types::BlockTag::PreConfirmed,
             ),
         }
     }
-    pub fn set_contract_address(&mut self, address: starknet::core::types::Felt) {
+    pub fn set_contract_address(&mut self, address: starknet_rust::core::types::Felt) {
         self.address = address;
     }
     pub fn provider(&self) -> &P {
         &self.provider
     }
-    pub fn set_block(&mut self, block_id: starknet::core::types::BlockId) {
+    pub fn set_block(&mut self, block_id: starknet_rust::core::types::BlockId) {
         self.block_id = block_id;
     }
-    pub fn with_block(self, block_id: starknet::core::types::BlockId) -> Self {
+    pub fn with_block(self, block_id: starknet_rust::core::types::BlockId) -> Self {
         Self { block_id, ..self }
     }
 }
 #[derive(Debug, Clone)]
 pub struct AttackEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub player: cainome::cairo_serde::ContractAddress,
     pub x: u8,
     pub y: u8,
@@ -76,7 +78,7 @@ impl cainome::cairo_serde::CairoSerde for AttackEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.player,
@@ -85,9 +87,9 @@ impl cainome::cairo_serde::CairoSerde for AttackEvent {
         __size += u8::cairo_serialized_size(&__rust.y);
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player),
@@ -97,12 +99,12 @@ impl cainome::cairo_serde::CairoSerde for AttackEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let player = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -122,8 +124,8 @@ impl cainome::cairo_serde::CairoSerde for AttackEvent {
     }
 }
 impl AttackEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("AttackEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("AttackEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "AttackEvent"
@@ -131,7 +133,7 @@ impl AttackEvent {
 }
 #[derive(Debug, Clone)]
 pub struct AttackResultEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub attacker: cainome::cairo_serde::ContractAddress,
     pub defender: cainome::cairo_serde::ContractAddress,
     pub x: u8,
@@ -144,7 +146,7 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.attacker,
@@ -158,9 +160,9 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
         __size += Option::<ShipKind>::cairo_serialized_size(&__rust.ship_kind);
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.attacker),
@@ -175,12 +177,12 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let attacker = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -210,8 +212,8 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
     }
 }
 impl AttackResultEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("AttackResultEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("AttackResultEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "AttackResultEvent"
@@ -219,7 +221,7 @@ impl AttackResultEvent {
 }
 #[derive(Debug, Clone)]
 pub struct GameOverEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
     pub player_b: cainome::cairo_serde::ContractAddress,
     pub outcome: Outcome,
@@ -230,7 +232,7 @@ impl cainome::cairo_serde::CairoSerde for GameOverEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.player_a,
@@ -242,9 +244,9 @@ impl cainome::cairo_serde::CairoSerde for GameOverEvent {
         __size += Outcome::cairo_serialized_size(&__rust.outcome);
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player_a),
@@ -257,12 +259,12 @@ impl cainome::cairo_serde::CairoSerde for GameOverEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let player_a = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -286,8 +288,8 @@ impl cainome::cairo_serde::CairoSerde for GameOverEvent {
     }
 }
 impl GameOverEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("GameOverEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("GameOverEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "GameOverEvent"
@@ -295,7 +297,7 @@ impl GameOverEvent {
 }
 #[derive(Debug, Clone)]
 pub struct GameRevealRequestEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
     pub player_b: cainome::cairo_serde::ContractAddress,
 }
@@ -305,7 +307,7 @@ impl cainome::cairo_serde::CairoSerde for GameRevealRequestEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.player_a,
@@ -316,9 +318,9 @@ impl cainome::cairo_serde::CairoSerde for GameRevealRequestEvent {
             );
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player_a),
@@ -330,12 +332,12 @@ impl cainome::cairo_serde::CairoSerde for GameRevealRequestEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let player_a = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -356,8 +358,8 @@ impl cainome::cairo_serde::CairoSerde for GameRevealRequestEvent {
     }
 }
 impl GameRevealRequestEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("GameRevealRequestEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("GameRevealRequestEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "GameRevealRequestEvent"
@@ -365,7 +367,7 @@ impl GameRevealRequestEvent {
 }
 #[derive(Debug, Clone)]
 pub struct GameStartedEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub attacker: cainome::cairo_serde::ContractAddress,
     pub defender: cainome::cairo_serde::ContractAddress,
 }
@@ -375,7 +377,7 @@ impl cainome::cairo_serde::CairoSerde for GameStartedEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.attacker,
@@ -386,9 +388,9 @@ impl cainome::cairo_serde::CairoSerde for GameStartedEvent {
             );
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.attacker),
@@ -400,12 +402,12 @@ impl cainome::cairo_serde::CairoSerde for GameStartedEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let attacker = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -426,8 +428,8 @@ impl cainome::cairo_serde::CairoSerde for GameStartedEvent {
     }
 }
 impl GameStartedEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("GameStartedEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("GameStartedEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "GameStartedEvent"
@@ -454,8 +456,8 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferStarted {
             );
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(
@@ -469,7 +471,7 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferStarted {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
@@ -494,8 +496,8 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferStarted {
     }
 }
 impl OwnershipTransferStarted {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("OwnershipTransferStarted")
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("OwnershipTransferStarted")
             .unwrap()
     }
     pub fn event_name() -> &'static str {
@@ -523,8 +525,8 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferred {
             );
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(
@@ -538,7 +540,7 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferred {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
@@ -563,8 +565,8 @@ impl cainome::cairo_serde::CairoSerde for OwnershipTransferred {
     }
 }
 impl OwnershipTransferred {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("OwnershipTransferred").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred").unwrap()
     }
     pub fn event_name() -> &'static str {
         "OwnershipTransferred"
@@ -588,8 +590,8 @@ impl cainome::cairo_serde::CairoSerde for PlayerEnteredLobbyEvent {
             );
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
         __out.extend(BoardSize::cairo_serialize(&__rust.lobby));
         __out
             .extend(
@@ -598,7 +600,7 @@ impl cainome::cairo_serde::CairoSerde for PlayerEnteredLobbyEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
@@ -617,8 +619,8 @@ impl cainome::cairo_serde::CairoSerde for PlayerEnteredLobbyEvent {
     }
 }
 impl PlayerEnteredLobbyEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("PlayerEnteredLobbyEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("PlayerEnteredLobbyEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "PlayerEnteredLobbyEvent"
@@ -626,7 +628,7 @@ impl PlayerEnteredLobbyEvent {
 }
 #[derive(Debug, Clone)]
 pub struct PlayersAssembledEvent {
-    pub game_id: starknet::core::types::Felt,
+    pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
     pub player_b: cainome::cairo_serde::ContractAddress,
     pub board_size: BoardSize,
@@ -637,7 +639,7 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
     #[inline]
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         let mut __size = 0;
-        __size += starknet::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
         __size
             += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
                 &__rust.player_a,
@@ -649,9 +651,9 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
         __size += BoardSize::cairo_serialized_size(&__rust.board_size);
         __size
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
-        let mut __out: Vec<starknet::core::types::Felt> = vec![];
-        __out.extend(starknet::core::types::Felt::cairo_serialize(&__rust.game_id));
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
         __out
             .extend(
                 cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player_a),
@@ -664,12 +666,12 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
         __out
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let mut __offset = __offset;
-        let game_id = starknet::core::types::Felt::cairo_deserialize(__felts, __offset)?;
-        __offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
         let player_a = cainome::cairo_serde::ContractAddress::cairo_deserialize(
             __felts,
             __offset,
@@ -693,8 +695,8 @@ impl cainome::cairo_serde::CairoSerde for PlayersAssembledEvent {
     }
 }
 impl PlayersAssembledEvent {
-    pub fn event_selector() -> starknet::core::types::Felt {
-        starknet::core::utils::get_selector_from_name("PlayersAssembledEvent").unwrap()
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("PlayersAssembledEvent").unwrap()
     }
     pub fn event_name() -> &'static str {
         "PlayersAssembledEvent"
@@ -718,7 +720,7 @@ impl cainome::cairo_serde::CairoSerde for BoardSize {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             BoardSize::Standard => usize::cairo_serialize(&0usize),
             BoardSize::Smaller(val) => {
@@ -737,7 +739,7 @@ impl cainome::cairo_serde::CairoSerde for BoardSize {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -804,7 +806,7 @@ impl cainome::cairo_serde::CairoSerde for Event {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             Event::PlayerEntererLobby(val) => {
                 let mut temp = vec![];
@@ -858,7 +860,7 @@ impl cainome::cairo_serde::CairoSerde for Event {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -929,10 +931,10 @@ impl cainome::cairo_serde::CairoSerde for Event {
         }
     }
 }
-impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
+impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
     type Error = String;
     fn try_from(
-        event: &starknet::core::types::EmittedEvent,
+        event: &starknet_rust::core::types::EmittedEvent,
     ) -> Result<Self, Self::Error> {
         use cainome::cairo_serde::CairoSerde;
         if event.keys.is_empty() {
@@ -940,7 +942,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("PlayerEntererLobby")
+            == starknet_rust::core::utils::get_selector_from_name("PlayerEntererLobby")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "PlayerEntererLobby")
                 })
@@ -988,14 +990,14 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("PlayersAssembled")
+            == starknet_rust::core::utils::get_selector_from_name("PlayersAssembled")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "PlayersAssembled")
                 })
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1011,7 +1013,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1080,12 +1082,12 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameStarted")
+            == starknet_rust::core::utils::get_selector_from_name("GameStarted")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "GameStarted"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1101,7 +1103,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let attacker = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1152,12 +1154,12 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("Attack")
+            == starknet_rust::core::utils::get_selector_from_name("Attack")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "Attack"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1173,7 +1175,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1231,12 +1233,12 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("AttackResult")
+            == starknet_rust::core::utils::get_selector_from_name("AttackResult")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "AttackResult"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1252,7 +1254,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let attacker = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1350,14 +1352,14 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameRevealRequest")
+            == starknet_rust::core::utils::get_selector_from_name("GameRevealRequest")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "GameRevealRequest")
                 })
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1373,7 +1375,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1424,12 +1426,12 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameOver")
+            == starknet_rust::core::utils::get_selector_from_name("GameOver")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "GameOver"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1445,7 +1447,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1511,7 +1513,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferred")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferred")
                 })
@@ -1569,7 +1571,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferStarted")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferStarted")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferStarted")
                 })
@@ -1628,16 +1630,16 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for Event {
         Err(format!("Could not match any event from keys {:?}", event.keys))
     }
 }
-impl TryFrom<&starknet::core::types::Event> for Event {
+impl TryFrom<&starknet_rust::core::types::Event> for Event {
     type Error = String;
-    fn try_from(event: &starknet::core::types::Event) -> Result<Self, Self::Error> {
+    fn try_from(event: &starknet_rust::core::types::Event) -> Result<Self, Self::Error> {
         use cainome::cairo_serde::CairoSerde;
         if event.keys.is_empty() {
             return Err("Event has no key".to_string());
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("PlayerEntererLobby")
+            == starknet_rust::core::utils::get_selector_from_name("PlayerEntererLobby")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "PlayerEntererLobby")
                 })
@@ -1685,14 +1687,14 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("PlayersAssembled")
+            == starknet_rust::core::utils::get_selector_from_name("PlayersAssembled")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "PlayersAssembled")
                 })
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1708,7 +1710,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1777,12 +1779,12 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameStarted")
+            == starknet_rust::core::utils::get_selector_from_name("GameStarted")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "GameStarted"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1798,7 +1800,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let attacker = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1849,12 +1851,12 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("Attack")
+            == starknet_rust::core::utils::get_selector_from_name("Attack")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "Attack"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1870,7 +1872,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -1928,12 +1930,12 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("AttackResult")
+            == starknet_rust::core::utils::get_selector_from_name("AttackResult")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "AttackResult"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -1949,7 +1951,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let attacker = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -2047,14 +2049,14 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameRevealRequest")
+            == starknet_rust::core::utils::get_selector_from_name("GameRevealRequest")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "GameRevealRequest")
                 })
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -2070,7 +2072,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -2121,12 +2123,12 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("GameOver")
+            == starknet_rust::core::utils::get_selector_from_name("GameOver")
                 .unwrap_or_else(|_| panic!("Invalid selector for {}", "GameOver"))
         {
             let mut key_offset = 0 + 1;
             let mut data_offset = 0;
-            let game_id = match starknet::core::types::Felt::cairo_deserialize(
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
                 &event.keys,
                 key_offset,
             ) {
@@ -2142,7 +2144,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
                     );
                 }
             };
-            key_offset += starknet::core::types::Felt::cairo_serialized_size(&game_id);
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
             let player_a = match cainome::cairo_serde::ContractAddress::cairo_deserialize(
                 &event.data,
                 data_offset,
@@ -2208,7 +2210,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferred")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferred")
                 })
@@ -2266,7 +2268,7 @@ impl TryFrom<&starknet::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferStarted")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferStarted")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferStarted")
                 })
@@ -2327,8 +2329,8 @@ impl TryFrom<&starknet::core::types::Event> for Event {
 }
 #[derive(Debug, Clone)]
 pub enum FireStatus {
-    Miss(starknet::core::types::Felt),
-    Hit((ShipKind, starknet::core::types::Felt)),
+    Miss(starknet_rust::core::types::Felt),
+    Hit((ShipKind, starknet_rust::core::types::Felt)),
 }
 impl cainome::cairo_serde::CairoSerde for FireStatus {
     type RustType = Self;
@@ -2337,27 +2339,27 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
     fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
         match __rust {
             FireStatus::Miss(val) => {
-                starknet::core::types::Felt::cairo_serialized_size(val) + 1
+                starknet_rust::core::types::Felt::cairo_serialized_size(val) + 1
             }
             FireStatus::Hit(val) => {
-                <(ShipKind, starknet::core::types::Felt)>::cairo_serialized_size(val) + 1
+                <(ShipKind, starknet_rust::core::types::Felt)>::cairo_serialized_size(val) + 1
             }
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             FireStatus::Miss(val) => {
                 let mut temp = vec![];
                 temp.extend(usize::cairo_serialize(&0usize));
-                temp.extend(starknet::core::types::Felt::cairo_serialize(val));
+                temp.extend(starknet_rust::core::types::Felt::cairo_serialize(val));
                 temp
             }
             FireStatus::Hit(val) => {
                 let mut temp = vec![];
                 temp.extend(usize::cairo_serialize(&1usize));
                 temp.extend(
-                    <(ShipKind, starknet::core::types::Felt)>::cairo_serialize(val),
+                    <(ShipKind, starknet_rust::core::types::Felt)>::cairo_serialize(val),
                 );
                 temp
             }
@@ -2365,7 +2367,7 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2374,7 +2376,7 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
             0usize => {
                 Ok(
                     FireStatus::Miss(
-                        starknet::core::types::Felt::cairo_deserialize(
+                        starknet_rust::core::types::Felt::cairo_deserialize(
                             __felts,
                             __offset + 1,
                         )?,
@@ -2386,7 +2388,7 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
                     FireStatus::Hit(
                         <(
                             ShipKind,
-                            starknet::core::types::Felt,
+                            starknet_rust::core::types::Felt,
                         )>::cairo_deserialize(__felts, __offset + 1)?,
                     ),
                 )
@@ -2419,7 +2421,7 @@ impl cainome::cairo_serde::CairoSerde for LargerBoardSize {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             LargerBoardSize::TwelveByTwelve => usize::cairo_serialize(&0usize),
             LargerBoardSize::FourteenByFourteen => usize::cairo_serialize(&1usize),
@@ -2428,7 +2430,7 @@ impl cainome::cairo_serde::CairoSerde for LargerBoardSize {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2469,7 +2471,7 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             Outcome::Fair(val) => {
                 let mut temp = vec![];
@@ -2488,7 +2490,7 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2545,7 +2547,7 @@ impl cainome::cairo_serde::CairoSerde for OwnableComponentEvent {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             OwnableComponentEvent::OwnershipTransferred(val) => {
                 let mut temp = vec![];
@@ -2563,7 +2565,7 @@ impl cainome::cairo_serde::CairoSerde for OwnableComponentEvent {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2596,10 +2598,10 @@ impl cainome::cairo_serde::CairoSerde for OwnableComponentEvent {
         }
     }
 }
-impl TryFrom<&starknet::core::types::EmittedEvent> for OwnableComponentEvent {
+impl TryFrom<&starknet_rust::core::types::EmittedEvent> for OwnableComponentEvent {
     type Error = String;
     fn try_from(
-        event: &starknet::core::types::EmittedEvent,
+        event: &starknet_rust::core::types::EmittedEvent,
     ) -> Result<Self, Self::Error> {
         use cainome::cairo_serde::CairoSerde;
         if event.keys.is_empty() {
@@ -2607,7 +2609,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for OwnableComponentEvent {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferred")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferred")
                 })
@@ -2663,7 +2665,7 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for OwnableComponentEvent {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferStarted")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferStarted")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferStarted")
                 })
@@ -2720,16 +2722,16 @@ impl TryFrom<&starknet::core::types::EmittedEvent> for OwnableComponentEvent {
         Err(format!("Could not match any event from keys {:?}", event.keys))
     }
 }
-impl TryFrom<&starknet::core::types::Event> for OwnableComponentEvent {
+impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
     type Error = String;
-    fn try_from(event: &starknet::core::types::Event) -> Result<Self, Self::Error> {
+    fn try_from(event: &starknet_rust::core::types::Event) -> Result<Self, Self::Error> {
         use cainome::cairo_serde::CairoSerde;
         if event.keys.is_empty() {
             return Err("Event has no key".to_string());
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferred")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferred")
                 })
@@ -2785,7 +2787,7 @@ impl TryFrom<&starknet::core::types::Event> for OwnableComponentEvent {
         }
         let selector = event.keys[0];
         if selector
-            == starknet::core::utils::get_selector_from_name("OwnershipTransferStarted")
+            == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferStarted")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferStarted")
                 })
@@ -2866,7 +2868,7 @@ impl cainome::cairo_serde::CairoSerde for ShipKind {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             ShipKind::Carrier => usize::cairo_serialize(&0usize),
             ShipKind::Battleship => usize::cairo_serialize(&1usize),
@@ -2878,7 +2880,7 @@ impl cainome::cairo_serde::CairoSerde for ShipKind {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2916,7 +2918,7 @@ impl cainome::cairo_serde::CairoSerde for SmallerBoardSize {
             _ => 0,
         }
     }
-    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet::core::types::Felt> {
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
         match __rust {
             SmallerBoardSize::SixBySix => usize::cairo_serialize(&0usize),
             SmallerBoardSize::EightByEight => usize::cairo_serialize(&1usize),
@@ -2924,7 +2926,7 @@ impl cainome::cairo_serde::CairoSerde for SmallerBoardSize {
         }
     }
     fn cairo_deserialize(
-        __felts: &[starknet::core::types::Felt],
+        __felts: &[starknet_rust::core::types::Felt],
         __offset: usize,
     ) -> cainome::cairo_serde::Result<Self::RustType> {
         let __f = __felts[__offset];
@@ -2942,54 +2944,47 @@ impl cainome::cairo_serde::CairoSerde for SmallerBoardSize {
         }
     }
 }
-impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
+impl<A: starknet_rust::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn get_next_game_id(
         &self,
-    ) -> cainome::cairo_serde::call::FCall<A::Provider, starknet::core::types::Felt> {
-        use cainome::cairo_serde::CairoSerde;
+    ) -> starknet_rust::core::types::FunctionCall {
         let mut __calldata = vec![];
-        let __call = starknet::core::types::FunctionCall {
+        starknet_rust::core::types::FunctionCall {
             contract_address: self.address,
-            entry_point_selector: starknet::macros::selector!("get_next_game_id"),
+            entry_point_selector: starknet_rust::macros::selector!("get_next_game_id"),
             calldata: __calldata,
-        };
-        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+        }
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn owner(
         &self,
-    ) -> cainome::cairo_serde::call::FCall<
-        A::Provider,
-        cainome::cairo_serde::ContractAddress,
-    > {
-        use cainome::cairo_serde::CairoSerde;
+    ) -> starknet_rust::core::types::FunctionCall {
         let mut __calldata = vec![];
-        let __call = starknet::core::types::FunctionCall {
+        starknet_rust::core::types::FunctionCall {
             contract_address: self.address,
-            entry_point_selector: starknet::macros::selector!("owner"),
+            entry_point_selector: starknet_rust::macros::selector!("owner"),
             calldata: __calldata,
-        };
-        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+        }
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn attack_getcall(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         x: &u8,
         y: &u8,
-    ) -> starknet::core::types::Call {
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(u8::cairo_serialize(x));
         __calldata.extend(u8::cairo_serialize(y));
-        starknet::core::types::Call {
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("attack"),
+            selector: starknet_rust::macros::selector!("attack"),
             calldata: __calldata,
         }
     }
@@ -2997,18 +2992,18 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn attack(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         x: &u8,
         y: &u8,
-    ) -> starknet::accounts::ExecutionV3<A> {
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(u8::cairo_serialize(x));
         __calldata.extend(u8::cairo_serialize(y));
-        let __call = starknet::core::types::Call {
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("attack"),
+            selector: starknet_rust::macros::selector!("attack"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
@@ -3017,16 +3012,16 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn commit_board_getcall(
         &self,
-        root: &starknet::core::types::Felt,
-        game_id: &starknet::core::types::Felt,
-    ) -> starknet::core::types::Call {
+        root: &starknet_rust::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(root));
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
-        starknet::core::types::Call {
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(root));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("commit_board"),
+            selector: starknet_rust::macros::selector!("commit_board"),
             calldata: __calldata,
         }
     }
@@ -3034,16 +3029,16 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn commit_board(
         &self,
-        root: &starknet::core::types::Felt,
-        game_id: &starknet::core::types::Felt,
-    ) -> starknet::accounts::ExecutionV3<A> {
+        root: &starknet_rust::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(root));
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
-        let __call = starknet::core::types::Call {
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(root));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("commit_board"),
+            selector: starknet_rust::macros::selector!("commit_board"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
@@ -3052,18 +3047,18 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn defend_getcall(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         status: &FireStatus,
-        proof: &Vec<starknet::core::types::Felt>,
-    ) -> starknet::core::types::Call {
+        proof: &Vec<starknet_rust::core::types::Felt>,
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(FireStatus::cairo_serialize(status));
-        __calldata.extend(Vec::<starknet::core::types::Felt>::cairo_serialize(proof));
-        starknet::core::types::Call {
+        __calldata.extend(Vec::<starknet_rust::core::types::Felt>::cairo_serialize(proof));
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("defend"),
+            selector: starknet_rust::macros::selector!("defend"),
             calldata: __calldata,
         }
     }
@@ -3071,41 +3066,41 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn defend(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         status: &FireStatus,
-        proof: &Vec<starknet::core::types::Felt>,
-    ) -> starknet::accounts::ExecutionV3<A> {
+        proof: &Vec<starknet_rust::core::types::Felt>,
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(FireStatus::cairo_serialize(status));
-        __calldata.extend(Vec::<starknet::core::types::Felt>::cairo_serialize(proof));
-        let __call = starknet::core::types::Call {
+        __calldata.extend(Vec::<starknet_rust::core::types::Felt>::cairo_serialize(proof));
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("defend"),
+            selector: starknet_rust::macros::selector!("defend"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
-    pub fn renounce_ownership_getcall(&self) -> starknet::core::types::Call {
+    pub fn renounce_ownership_getcall(&self) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        starknet::core::types::Call {
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("renounce_ownership"),
+            selector: starknet_rust::macros::selector!("renounce_ownership"),
             calldata: __calldata,
         }
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
-    pub fn renounce_ownership(&self) -> starknet::accounts::ExecutionV3<A> {
+    pub fn renounce_ownership(&self) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        let __call = starknet::core::types::Call {
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("renounce_ownership"),
+            selector: starknet_rust::macros::selector!("renounce_ownership"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
@@ -3115,13 +3110,13 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     pub fn request_start_game_getcall(
         &self,
         board_size: &BoardSize,
-    ) -> starknet::core::types::Call {
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
         __calldata.extend(BoardSize::cairo_serialize(board_size));
-        starknet::core::types::Call {
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("request_start_game"),
+            selector: starknet_rust::macros::selector!("request_start_game"),
             calldata: __calldata,
         }
     }
@@ -3130,36 +3125,36 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     pub fn request_start_game(
         &self,
         board_size: &BoardSize,
-    ) -> starknet::accounts::ExecutionV3<A> {
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
         __calldata.extend(BoardSize::cairo_serialize(board_size));
-        let __call = starknet::core::types::Call {
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("request_start_game"),
+            selector: starknet_rust::macros::selector!("request_start_game"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
-    pub fn reset_getcall(&self) -> starknet::core::types::Call {
+    pub fn reset_getcall(&self) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        starknet::core::types::Call {
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("reset"),
+            selector: starknet_rust::macros::selector!("reset"),
             calldata: __calldata,
         }
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
-    pub fn reset(&self) -> starknet::accounts::ExecutionV3<A> {
+    pub fn reset(&self) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        let __call = starknet::core::types::Call {
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("reset"),
+            selector: starknet_rust::macros::selector!("reset"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
@@ -3168,18 +3163,18 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn reveal_getcall(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         board: &Vec<u8>,
-        salt: &starknet::core::types::Felt,
-    ) -> starknet::core::types::Call {
+        salt: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(Vec::<u8>::cairo_serialize(board));
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(salt));
-        starknet::core::types::Call {
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(salt));
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("reveal"),
+            selector: starknet_rust::macros::selector!("reveal"),
             calldata: __calldata,
         }
     }
@@ -3187,18 +3182,18 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn reveal(
         &self,
-        game_id: &starknet::core::types::Felt,
+        game_id: &starknet_rust::core::types::Felt,
         board: &Vec<u8>,
-        salt: &starknet::core::types::Felt,
-    ) -> starknet::accounts::ExecutionV3<A> {
+        salt: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(game_id));
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
         __calldata.extend(Vec::<u8>::cairo_serialize(board));
-        __calldata.extend(starknet::core::types::Felt::cairo_serialize(salt));
-        let __call = starknet::core::types::Call {
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(salt));
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("reveal"),
+            selector: starknet_rust::macros::selector!("reveal"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
@@ -3208,14 +3203,14 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     pub fn transfer_ownership_getcall(
         &self,
         new_owner: &cainome::cairo_serde::ContractAddress,
-    ) -> starknet::core::types::Call {
+    ) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
         __calldata
             .extend(cainome::cairo_serde::ContractAddress::cairo_serialize(new_owner));
-        starknet::core::types::Call {
+        starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("transfer_ownership"),
+            selector: starknet_rust::macros::selector!("transfer_ownership"),
             calldata: __calldata,
         }
     }
@@ -3224,46 +3219,42 @@ impl<A: starknet::accounts::ConnectedAccount + Sync> Starkwaves<A> {
     pub fn transfer_ownership(
         &self,
         new_owner: &cainome::cairo_serde::ContractAddress,
-    ) -> starknet::accounts::ExecutionV3<A> {
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];
         __calldata
             .extend(cainome::cairo_serde::ContractAddress::cairo_serialize(new_owner));
-        let __call = starknet::core::types::Call {
+        let __call = starknet_rust::core::types::Call {
             to: self.address,
-            selector: starknet::macros::selector!("transfer_ownership"),
+            selector: starknet_rust::macros::selector!("transfer_ownership"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])
     }
 }
-impl<P: starknet::providers::Provider + Sync> StarkwavesReader<P> {
+impl<P: starknet_rust::providers::Provider + Sync> StarkwavesReader<P> {
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn get_next_game_id(
         &self,
-    ) -> cainome::cairo_serde::call::FCall<P, starknet::core::types::Felt> {
-        use cainome::cairo_serde::CairoSerde;
+    ) -> starknet_rust::core::types::FunctionCall {
         let mut __calldata = vec![];
-        let __call = starknet::core::types::FunctionCall {
+        starknet_rust::core::types::FunctionCall {
             contract_address: self.address,
-            entry_point_selector: starknet::macros::selector!("get_next_game_id"),
+            entry_point_selector: starknet_rust::macros::selector!("get_next_game_id"),
             calldata: __calldata,
-        };
-        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+        }
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn owner(
         &self,
-    ) -> cainome::cairo_serde::call::FCall<P, cainome::cairo_serde::ContractAddress> {
-        use cainome::cairo_serde::CairoSerde;
+    ) -> starknet_rust::core::types::FunctionCall {
         let mut __calldata = vec![];
-        let __call = starknet::core::types::FunctionCall {
+        starknet_rust::core::types::FunctionCall {
             contract_address: self.address,
-            entry_point_selector: starknet::macros::selector!("owner"),
+            entry_point_selector: starknet_rust::macros::selector!("owner"),
             calldata: __calldata,
-        };
-        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+        }
     }
 }

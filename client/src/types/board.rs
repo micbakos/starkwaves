@@ -6,7 +6,7 @@ use crate::types::board_size::BoardSize;
 use crate::types::error::GameError::{AllShipsPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
 use crate::types::fire_report::FireReport;
 use crate::types::{Cell, ShipKind};
-use starknet::core::types::Felt;
+use starknet_rust::core::types::Felt;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use uuid::Uuid;
@@ -296,10 +296,10 @@ fn format_board_row(size: usize, items: &[&str], index: Option<usize>, hits: &[b
     match index {
         None => row.push_str("      |"),
         Some(i) => {
-            let label = if i + 1 < 10 {
-                format!("0{}", i + 1)
+            let label = if i < 10 {
+                format!("0{}", i)
             } else {
-                (i + 1).to_string()
+                i.to_string()
             };
             row = format!("{row}{}|", sanitize(&label));
         }
@@ -325,7 +325,7 @@ fn write_board_grid(
     misses: &[usize],
 ) -> fmt::Result {
     let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
-    let column_titles = (1..=size)
+    let column_titles = (0..size)
         .map(|i| if i < 10 { format!("0{i}") } else { format!("{i}") })
         .collect::<Vec<_>>();
 
@@ -363,24 +363,40 @@ impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let size = self.size.size() as usize;
         let cells = self.cells();
+
+        let ship_hits: Vec<usize> = self.received_fire.iter()
+            .filter(|&&offset| matches!(cells[offset], Cell::Ship(_)))
+            .copied()
+            .collect();
+        let water_hits: Vec<usize> = self.received_fire.iter()
+            .filter(|&&offset| matches!(cells[offset], Cell::Water))
+            .copied()
+            .collect();
+
         let rows: Vec<Vec<String>> = cells
             .chunks(size)
-            .map(|chunk| {
-                chunk.iter().map(|cell| match cell {
-                    Cell::Water => "~~".to_string(),
-                    Cell::Ship(ship_id) => {
-                        let ship = self
-                            .ships
-                            .iter()
-                            .find(|s| s.id.as_bytes() == ship_id.as_bytes())
-                            .expect(&format!("Ship id {} should exist but not found.", ship_id));
-                        ship.kind.code().to_string()
+            .enumerate()
+            .map(|(row_idx, chunk)| {
+                chunk.iter().enumerate().map(|(col_idx, cell)| {
+                    let offset = row_idx * size + col_idx;
+                    match cell {
+                        Cell::Water => {
+                            if water_hits.contains(&offset) { "**".to_string() } else { "~~".to_string() }
+                        }
+                        Cell::Ship(ship_id) => {
+                            let ship = self
+                                .ships
+                                .iter()
+                                .find(|s| s.id.as_bytes() == ship_id.as_bytes())
+                                .expect(&format!("Ship id {} should exist but not found.", ship_id));
+                            ship.kind.code().to_string()
+                        }
                     }
                 }).collect()
             })
             .collect();
 
-        write_board_grid(f, size, &rows, &self.received_fire, &[])
+        write_board_grid(f, size, &rows, &ship_hits, &water_hits)
     }
 }
 

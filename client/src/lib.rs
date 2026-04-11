@@ -2,3 +2,4 @@
 pub mod types;
 pub mod merkle;
 pub mod game;
+pub mod utils;

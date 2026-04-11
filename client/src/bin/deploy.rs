@@ -2,14 +2,14 @@
 mod common;
 
 use common::{check_sncast, wait_for_tx, Config, CONTRACT_PATH};
-use starknet::accounts::{Account, AccountError, ConnectedAccount, SingleOwnerAccount};
-use starknet::contract::{ContractFactory, UdcSelector};
-use starknet::core::types::{
+use starknet_rust::accounts::{Account, AccountError, ConnectedAccount, SingleOwnerAccount};
+use starknet_rust::contract::{ContractFactory, UdcSelector};
+use starknet_rust::core::types::{
     ContractExecutionError, Felt, StarknetError, TransactionExecutionErrorData,
 };
-use starknet::providers::jsonrpc::HttpTransport;
-use starknet::providers::{JsonRpcClient, Provider, ProviderError};
-use starknet::signers::LocalWallet;
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::providers::{JsonRpcClient, Provider, ProviderError};
+use starknet_rust::signers::LocalWallet;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{exit, Command, Stdio};

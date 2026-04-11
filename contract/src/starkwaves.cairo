@@ -211,6 +211,13 @@ pub mod Starkwaves {
                 game_id -= 1;
             }
 
+            let all_board_sizes = AllBoardSizesTrait::all();
+            let zero_address: ContractAddress = 0.try_into().unwrap();
+            for board_size in all_board_sizes {
+                let size = board_size.size();
+                self.open_lobbies.entry(size).write(zero_address);
+            }
+
             self.next_game_id.write(1);
         }
 

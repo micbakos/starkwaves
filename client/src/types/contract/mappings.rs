@@ -1,8 +1,8 @@
 use crate::types::contract::starkwaves::Event;
 use crate::types::error::GameError;
-use starknet::core::types::TransactionReceipt;
-use starknet::core::types::{Event as StarknetEvent, Felt};
-use starknet::macros::selector;
+use starknet_rust::core::types::TransactionReceipt;
+use starknet_rust::core::types::{Event as StarknetEvent, Felt};
+use starknet_rust::macros::selector;
 
 pub trait IntoEvents {
     fn into_events(self) -> Result<Vec<Event>, GameError>;
@@ -40,23 +40,11 @@ pub fn in_game_event_keys(game_id: Felt) -> Vec<Vec<Felt>> {
     vec![
         vec![
             selector!("GameStarted"),
-            game_id
-        ],
-        vec![
             selector!("Attack"),
-            game_id
-        ],
-        vec![
-            selector!("Hit"),
-            game_id
-        ],
-        vec![
+            selector!("AttackResult"),
             selector!("GameRevealRequest"),
-            game_id
-        ],
-        vec![
             selector!("GameOver"),
-            game_id
         ],
+        vec![game_id],
     ]
 }
