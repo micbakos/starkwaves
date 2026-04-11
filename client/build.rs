@@ -20,7 +20,6 @@ fn main() {
     {
         println!("cargo:rerun-if-changed=../contract/merkle/Scarb.toml");
         println!("cargo:rerun-if-changed=../contract/merkle/src");
-        println!("cargo:rerun-if-changed=../contract/merkle/target");
 
         let sierra_file = build_merkle(BUILD_RELEASE);
         println!(
@@ -29,65 +28,64 @@ fn main() {
         );
     }
 
-    println!("cargo:rerun-if-changed=../contract/src");
-    println!("cargo:rerun-if-changed=../contract/target");
+    println!("cargo:rerun-if-changed=../contract/src/");
     println!("cargo:rerun-if-changed=../contract/Scarb.toml");
 
+    let contract_dir = Path::new("../contract");
+    let mut scarb_args: Vec<&str> = vec![];
+    scarb_args.push("build");
+    let output = Command::new("scarb")
+        .current_dir(contract_dir)
+        .args(scarb_args)
+        .output()
+        .expect("Failed to execute scarb build");
 
-    // let contract_dir = Path::new("../contract");
-    // let mut scarb_args: Vec<&str> = vec![];
-    // scarb_args.push("build");
-    // let output = Command::new("scarb")
-    //     .current_dir(contract_dir)
-    //     .args(scarb_args)
-    //     .output()
-    //     .expect("Failed to execute scarb build");
-    //
-    // if !output.status.success() {
-    //     let stderr = String::from_utf8_lossy(&output.stderr);
-    //     panic!("Cairo compilation failed:\n{}", stderr);
-    // }
-    //
-    // let target_dir = if BUILD_RELEASE {
-    //     contract_dir.join("target/release")
-    // } else {
-    //     contract_dir.join("target/dev")
-    // };
-    //
-    // let contract = find_json_file(&target_dir, "starkwaves_Starkwaves.contract_class.json")
-    //     .expect("Could not find Contract output file. Check Scarb build output.");
-    //
-    // let output_dir = PathBuf::from("src/types/contract");
-    //
-    // let output_path = output_dir.join("starkwaves.rs");
-    // let abigen = Abigen::new("Starkwaves", contract.to_str().unwrap())
-    //     .with_execution_version(ExecutionVersion::V3)
-    //     .with_derives(vec![
-    //         "Debug".into(),
-    //         "Clone".into(),
-    //     ])
-    //     .with_types_aliases(HashMap::from([
-    //         ("openzeppelin_access::ownable::ownable::OwnableComponent::Event".to_string(), "OwnableComponentEvent".to_string())
-    //     ]));
-    //
-    // abigen
-    //     .generate()
-    //     .expect("Unable to generate Abigen.")
-    //     .write_to_file(output_path.to_str().unwrap())
-    //     .expect("Couldn't write to src/abi.rs");
-    //
-    // let generated = fs::read_to_string(&output_path).expect("Failed to read generated file");
-    // let patched = generated.replace("starknet::", "starknet_rust::");
-    // fs::write(&output_path, patched).expect("Failed to patch generated file");
-    //
-    // let mod_rs_path = output_dir.join("mod.rs");
-    // if mod_rs_path.exists() {
-    //     let contents = fs::read_to_string(&mod_rs_path).expect("Failed to read mod.rs");
-    //     if !contents.contains("pub mod starkwaves") {
-    //         let new_contents = format!("{}\npub mod starkwaves;\n", contents.trim_end());
-    //         fs::write(&mod_rs_path, new_contents).expect("Failed to write to mod.rs");
-    //     }
-    // }
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        panic!("Cairo compilation failed:\n{}", stderr);
+    }
+
+    let target_dir = if BUILD_RELEASE {
+        contract_dir.join("target/release")
+    } else {
+        contract_dir.join("target/dev")
+    };
+
+    let contract = find_json_file(&target_dir, "starkwaves_Starkwaves.contract_class.json")
+        .expect("Could not find Contract output file. Check Scarb build output.");
+
+    let output_dir = PathBuf::from("src/types/contract");
+
+    let output_path = output_dir.join("starkwaves.rs");
+    let abigen = Abigen::new("Starkwaves", contract.to_str().unwrap())
+        .with_execution_version(ExecutionVersion::V3)
+        .with_derives(vec![
+            "Debug".into(),
+            "Clone".into(),
+        ])
+        .with_types_aliases(HashMap::from([
+            ("openzeppelin_access::ownable::ownable::OwnableComponent::Event".to_string(), "OwnableComponentEvent".to_string())
+        ]));
+
+    let generated = abigen
+        .generate()
+        .expect("Unable to generate Abigen.");
+    let generated_str = generated.to_string();
+    let patched = generated_str.replace("starknet::", "starknet_rust::");
+
+    let existing = fs::read_to_string(&output_path).unwrap_or_default();
+    if existing != patched {
+        fs::write(&output_path, &patched).expect("Couldn't write to src/types/contract/starkwaves.rs");
+    }
+
+    let mod_rs_path = output_dir.join("mod.rs");
+    if mod_rs_path.exists() {
+        let contents = fs::read_to_string(&mod_rs_path).expect("Failed to read mod.rs");
+        if !contents.contains("pub mod starkwaves") {
+            let new_contents = format!("{}\npub mod starkwaves;\n", contents.trim_end());
+            fs::write(&mod_rs_path, new_contents).expect("Failed to write to mod.rs");
+        }
+    }
 }
 
 #[cfg(feature = "merkle-build")]

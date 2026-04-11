@@ -519,13 +519,11 @@ dependencies = [
 [[package]]
 name = "cainome-cairo-serde"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ae2d4c21db23c7730a85187c2e9d73fe00c123171839185fb13f31550f3240"
 dependencies = [
  "num-bigint",
  "serde",
  "serde_with",
- "starknet",
+ "starknet-rust",
  "thiserror 2.0.17",
 ]
 

@@ -1,0 +1,639 @@
+//! Support for string compatibility with Cairo `ByteArray`.
+//! <https://github.com/starkware-libs/cairo/blob/a4de08fbd75fa1d58c69d054d6b3d99aaf318f90/corelib/src/byte_array.cairo>
+//!
+//! The basic concept of this `ByteArray` is relying on a string being
+//! represented as an array of bytes packed by 31 bytes in a felt.
+//! To support any string even if the length is not a multiple of 31,
+//! the `ByteArray` struct has a `pending_word` field, which is the last
+//! word that is always shorter than 31 bytes.
+//!
+//! In the data structure, everything is represented as a felt to be compatible
+//! with the Cairo implementation.
+use std::{
+    str::{self},
+    string::FromUtf8Error,
+};
+
+use starknet_rust::core::types::Felt;
+
+use crate::error::{Error, Result as CainomeResult};
+use crate::CairoSerde;
+
+const MAX_WORD_LEN: usize = 31;
+
+pub const BYTES31_MAX: Felt = Felt::from_raw([
+    576460566199927480,
+    18446744073709514624,
+    20123647,
+    18446744062762287141,
+]);
+
+#[derive(
+    Debug, Clone, Eq, PartialEq, PartialOrd, Default, serde::Serialize, serde::Deserialize,
+)]
+pub struct Bytes31(Felt);
+
+impl Bytes31 {
+    pub fn new(felt: Felt) -> CainomeResult<Self> {
+        if felt > BYTES31_MAX {
+            Err(Error::Bytes31OutOfRange)
+        } else {
+            Ok(Self(felt))
+        }
+    }
+
+    pub fn felt(&self) -> Felt {
+        self.0
+    }
+}
+
+impl From<Bytes31> for Felt {
+    fn from(value: Bytes31) -> Self {
+        value.felt()
+    }
+}
+
+impl TryFrom<Felt> for Bytes31 {
+    type Error = Error;
+
+    fn try_from(value: Felt) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl CairoSerde for Bytes31 {
+    type RustType = Self;
+
+    fn cairo_serialize(rust: &Self::RustType) -> Vec<Felt> {
+        vec![rust.felt()]
+    }
+
+    fn cairo_deserialize(felts: &[Felt], offset: usize) -> CainomeResult<Self::RustType> {
+        Self::new(felts[offset])
+    }
+}
+
+#[derive(
+    Debug, Clone, Eq, PartialEq, PartialOrd, Default, serde::Serialize, serde::Deserialize,
+)]
+pub struct ByteArray {
+    pub data: Vec<Bytes31>,
+    pub pending_word: Felt,
+    pub pending_word_len: usize,
+}
+
+impl CairoSerde for ByteArray {
+    type RustType = Self;
+
+    const SERIALIZED_SIZE: Option<usize> = None;
+
+    fn cairo_serialized_size(rust: &Self::RustType) -> usize {
+        let mut size = 0;
+        size += Vec::<Bytes31>::cairo_serialized_size(&rust.data);
+        size += Felt::cairo_serialized_size(&rust.pending_word);
+        size += u32::cairo_serialized_size(&(rust.pending_word_len as u32));
+        size
+    }
+
+    fn cairo_serialize(rust: &Self::RustType) -> Vec<Felt> {
+        let mut out: Vec<Felt> = vec![];
+        out.extend(Vec::<Bytes31>::cairo_serialize(&rust.data));
+        out.extend(Felt::cairo_serialize(&rust.pending_word));
+        out.extend(u32::cairo_serialize(&(rust.pending_word_len as u32)));
+        out
+    }
+
+    fn cairo_deserialize(felts: &[Felt], offset: usize) -> CainomeResult<Self::RustType> {
+        let mut offset = offset;
+        let data = Vec::<Bytes31>::cairo_deserialize(felts, offset)?;
+        offset += Vec::<Bytes31>::cairo_serialized_size(&data);
+        let pending_word = Felt::cairo_deserialize(felts, offset)?;
+        offset += Felt::cairo_serialized_size(&pending_word);
+        let pending_word_len = u32::cairo_deserialize(felts, offset)?;
+
+        Ok(ByteArray {
+            data,
+            pending_word,
+            pending_word_len: pending_word_len as usize,
+        })
+    }
+}
+
+impl ByteArray {
+    /// Converts a `String` into a `ByteArray`.
+    /// The rust type `String` implies UTF-8 encoding,
+    /// event if this function is not directly bound to this encoding.
+    ///
+    /// # Arguments
+    ///
+    /// * `string` - The always valid UTF-8 string to convert.
+    pub fn from_string(string: &str) -> CainomeResult<Self> {
+        let bytes = string.as_bytes();
+        let chunks: Vec<_> = bytes.chunks(MAX_WORD_LEN).collect();
+
+        let remainder = if bytes.len() % MAX_WORD_LEN != 0 {
+            chunks.last().copied().map(|last| last.to_vec())
+        } else {
+            None
+        };
+
+        let full_chunks = if remainder.is_some() {
+            &chunks[..chunks.len() - 1]
+        } else {
+            &chunks[..]
+        };
+
+        let (pending_word, pending_word_len) = if let Some(r) = remainder {
+            let len = r.len();
+            (
+                // Safe to unwrap as pending word always fit in a felt.
+                // Felt::from_byte_slice_be(&r).unwrap(),
+                Felt::from_bytes_be_slice(&r),
+                len,
+            )
+        } else {
+            (Felt::ZERO, 0)
+        };
+
+        let mut data = Vec::new();
+        for chunk in full_chunks {
+            // Safe to unwrap as full chunks are 31 bytes long, always fit in a felt.
+            data.push(Bytes31::new(Felt::from_bytes_be_slice(chunk))?)
+        }
+
+        Ok(Self {
+            data,
+            pending_word,
+            pending_word_len,
+        })
+    }
+
+    /// Converts `ByteArray` instance into a UTF-8 encoded string on success.
+    /// Returns error if the `ByteArray` contains an invalid UTF-8 string.
+    pub fn to_string(&self) -> Result<String, FromUtf8Error> {
+        let mut s = String::new();
+
+        for d in &self.data {
+            // Chunks are always 31 bytes long (MAX_WORD_LEN).
+            s.push_str(&felt_to_utf8(&d.felt(), MAX_WORD_LEN)?);
+        }
+
+        if self.pending_word_len > 0 {
+            s.push_str(&felt_to_utf8(&self.pending_word, self.pending_word_len)?);
+        }
+
+        Ok(s)
+    }
+
+    /// Converts `ByteArray` instance into a UTF-8 encoded string if possible.
+    /// Returns a lossy string if the `ByteArray` contains an invalid UTF-8 string.
+    pub fn to_string_lossy(&self) -> String {
+        let mut s = String::new();
+
+        for d in &self.data {
+            // Chunks are always 31 bytes long (MAX_WORD_LEN).
+            s.push_str(&felt_to_utf8_lossy(&d.felt(), MAX_WORD_LEN));
+        }
+
+        if self.pending_word_len > 0 {
+            s.push_str(&felt_to_utf8_lossy(
+                &self.pending_word,
+                self.pending_word_len,
+            ));
+        }
+
+        s
+    }
+
+    /// Converts `ByteArray` instance into raw bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        for d in &self.data {
+            // Chunks are always 31 bytes long (MAX_WORD_LEN).
+            let felt_bytes = d.felt().to_bytes_be();
+            bytes.extend_from_slice(&felt_bytes[1..1 + MAX_WORD_LEN]);
+        }
+
+        if self.pending_word_len > 0 {
+            let felt_bytes = self.pending_word.to_bytes_be();
+            bytes.extend_from_slice(&felt_bytes[1 + MAX_WORD_LEN - self.pending_word_len..]);
+        }
+
+        bytes
+    }
+}
+
+/// Converts a felt into a UTF-8 string.
+/// Returns an error if the felt contains an invalid UTF-8 string.
+///
+/// # Arguments
+///
+/// * `felt` - The `Felt` to convert. In the context of `ByteArray` this
+///   felt always contains at most 31 bytes.
+/// * `len` - The number of bytes in the felt, at most 31. In the context
+///   of `ByteArray`, we don't need to check `len` as the `MAX_WORD_LEN`
+///   already protect against that.
+fn felt_to_utf8(felt: &Felt, len: usize) -> Result<String, FromUtf8Error> {
+    let mut buffer = Vec::new();
+
+    // ByteArray always enforce to have the first byte equal to 0.
+    // That's why we start to 1.
+    for byte in felt.to_bytes_be()[1 + MAX_WORD_LEN - len..].iter() {
+        buffer.push(*byte)
+    }
+
+    String::from_utf8(buffer)
+}
+
+/// Converts a felt into a UTF-8 string.
+/// Returns a lossy string if the felt contains an invalid UTF-8 string.
+///
+/// # Arguments
+///
+/// * `felt` - The `Felt` to convert. In the context of `ByteArray` this
+///   felt always contains at most 31 bytes.
+/// * `len` - The number of bytes in the felt, at most 31. In the context
+///   of `ByteArray`, we don't need to check `len` as the `MAX_WORD_LEN`
+///   already protect against that.
+fn felt_to_utf8_lossy(felt: &Felt, len: usize) -> String {
+    let mut buffer = Vec::new();
+
+    // ByteArray always enforce to have the first byte equal to 0.
+    // That's why we start to 1.
+    for byte in felt.to_bytes_be()[1 + MAX_WORD_LEN - len..].iter() {
+        buffer.push(*byte)
+    }
+
+    String::from_utf8_lossy(&buffer).to_string()
+}
+
+impl TryFrom<String> for ByteArray {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        ByteArray::from_string(&value)
+    }
+}
+
+impl TryFrom<&str> for ByteArray {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        ByteArray::from_string(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ByteArray;
+    use starknet_rust::core::types::Felt;
+
+    #[test]
+    fn test_from_string_empty_string_default() {
+        let b = ByteArray::from_string("").unwrap();
+        assert_eq!(b, ByteArray::default());
+    }
+
+    #[test]
+    fn test_from_string_only_pending_word() {
+        let b = ByteArray::from_string("ABCD").unwrap();
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![],
+                pending_word: Felt::from_hex(
+                    "0x0000000000000000000000000000000000000000000000000000000041424344"
+                )
+                .unwrap(),
+                pending_word_len: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn test_from_string_max_pending_word_len() {
+        // pending word is at most 30 bytes long.
+        let b = ByteArray::from_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234").unwrap();
+
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![],
+                pending_word: Felt::from_hex(
+                    "0x00004142434445464748494a4b4c4d4e4f505152535455565758595a31323334"
+                )
+                .unwrap(),
+                pending_word_len: 30,
+            }
+        );
+    }
+
+    #[test]
+    fn test_from_string_data_only() {
+        let b = ByteArray::from_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345").unwrap();
+
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![Felt::from_hex(
+                    "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435"
+                )
+                .unwrap()
+                .try_into()
+                .unwrap()],
+                pending_word: Felt::ZERO,
+                pending_word_len: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn test_from_string_data_only_multiple() {
+        let b = ByteArray::from_string(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCDEFGHIJKLMNOPQRSTUVWXYZ12345",
+        )
+        .unwrap();
+
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![
+                    Felt::from_hex(
+                        "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435"
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                    Felt::from_hex(
+                        "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435"
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                ],
+                pending_word: Felt::ZERO,
+                pending_word_len: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn test_from_string_data_and_pending_word() {
+        let b = ByteArray::from_string(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCD",
+        )
+        .unwrap();
+
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![
+                    Felt::from_hex(
+                        "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435"
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                    Felt::from_hex(
+                        "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435"
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                ],
+                pending_word: Felt::from_hex(
+                    "0x0000000000000000000000000000000000000000000000000000000041424344"
+                )
+                .unwrap(),
+                pending_word_len: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn test_to_string_empty_string_default() {
+        let b = ByteArray::default();
+        assert_eq!(b.to_string().unwrap(), "");
+    }
+
+    #[test]
+    fn test_to_string_only_pending_word() {
+        let b = ByteArray {
+            data: vec![],
+            pending_word: Felt::from_hex(
+                "0x0000000000000000000000000000000000000000000000000000000041424344",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        assert_eq!(b.to_string().unwrap(), "ABCD");
+    }
+
+    #[test]
+    fn test_to_string_max_pending_word_len() {
+        let b = ByteArray {
+            data: vec![],
+            pending_word: Felt::from_hex(
+                "0x00004142434445464748494a4b4c4d4e4f505152535455565758595a31323334",
+            )
+            .unwrap(),
+            pending_word_len: 30,
+        };
+
+        assert_eq!(b.to_string().unwrap(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234");
+    }
+
+    #[test]
+    fn test_to_string_data_only() {
+        let b = ByteArray {
+            data: vec![Felt::from_hex(
+                "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+            )
+            .unwrap()
+            .try_into()
+            .unwrap()],
+            pending_word: Felt::ZERO,
+            pending_word_len: 0,
+        };
+
+        assert_eq!(b.to_string().unwrap(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345");
+    }
+
+    #[test]
+    fn test_to_string_data_only_multiple() {
+        let b = ByteArray {
+            data: vec![
+                Felt::from_hex(
+                    "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+                Felt::from_hex(
+                    "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            ],
+            pending_word: Felt::ZERO,
+            pending_word_len: 0,
+        };
+
+        assert_eq!(
+            b.to_string().unwrap(),
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCDEFGHIJKLMNOPQRSTUVWXYZ12345"
+        );
+    }
+
+    #[test]
+    fn test_to_string_data_and_pending_word() {
+        let b = ByteArray {
+            data: vec![
+                Felt::from_hex(
+                    "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+                Felt::from_hex(
+                    "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+                )
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            ],
+            pending_word: Felt::from_hex(
+                "0x0000000000000000000000000000000000000000000000000000000041424344",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        assert_eq!(
+            b.to_string().unwrap(),
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCD"
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_to_string_invalid_utf8() {
+        let b = ByteArray {
+            data: vec![],
+            pending_word: Felt::from_hex(
+                "0x00000000000000000000000000000000000000000000000000000000ffffffff",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        b.to_string().unwrap();
+    }
+
+    #[test]
+    fn test_from_utf8() {
+        let b: ByteArray = "🦀🌟".try_into().unwrap();
+
+        assert_eq!(
+            b,
+            ByteArray {
+                data: vec![],
+                pending_word: Felt::from_hex(
+                    "0x000000000000000000000000000000000000000000000000f09fa680f09f8c9f",
+                )
+                .unwrap(),
+                pending_word_len: 8,
+            }
+        );
+    }
+
+    #[test]
+    fn test_to_bytes_round_trip() {
+        let original_string = "Hello, World! 🦀";
+        let byte_array = ByteArray::from_string(original_string).unwrap();
+        let bytes = byte_array.to_bytes();
+
+        assert_eq!(bytes, original_string.as_bytes());
+        assert_eq!(String::from_utf8(bytes).unwrap(), original_string);
+    }
+
+    #[test]
+    fn test_to_bytes_with_data_and_pending() {
+        let b = ByteArray::from_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCD").unwrap();
+
+        let bytes = b.to_bytes();
+        assert_eq!(bytes, b"ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCD");
+    }
+
+    #[test]
+    fn test_to_bytes_empty() {
+        let b = ByteArray::default();
+        let bytes = b.to_bytes();
+
+        assert_eq!(bytes, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_to_string_lossy_valid_utf8() {
+        let b = ByteArray {
+            data: vec![],
+            pending_word: Felt::from_hex(
+                "0x0000000000000000000000000000000000000000000000000000000041424344",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        assert_eq!(b.to_string_lossy(), "ABCD");
+    }
+
+    #[test]
+    fn test_to_string_lossy_invalid_utf8() {
+        let b = ByteArray {
+            data: vec![],
+            pending_word: Felt::from_hex(
+                "0x00000000000000000000000000000000000000000000000000000000ffffffff",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        let result = b.to_string_lossy();
+        assert!(result.contains('\u{FFFD}'));
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_to_string_lossy_empty() {
+        let b = ByteArray::default();
+        assert_eq!(b.to_string_lossy(), "");
+    }
+
+    #[test]
+    fn test_to_string_lossy_with_emojis() {
+        let b: ByteArray = "🦀🌟".try_into().unwrap();
+        assert_eq!(b.to_string_lossy(), "🦀🌟");
+    }
+
+    #[test]
+    fn test_to_string_lossy_data_and_pending() {
+        let b = ByteArray {
+            data: vec![Felt::from_hex(
+                "0x004142434445464748494a4b4c4d4e4f505152535455565758595a3132333435",
+            )
+            .unwrap()
+            .try_into()
+            .unwrap()],
+            pending_word: Felt::from_hex(
+                "0x0000000000000000000000000000000000000000000000000000000041424344",
+            )
+            .unwrap(),
+            pending_word_len: 4,
+        };
+
+        assert_eq!(b.to_string_lossy(), "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345ABCD");
+    }
+}

@@ -30,6 +30,7 @@ clap = { version = "4", features = ["derive"] }
 
 [patch.crates-io]
 starknet-rust-core = { path = "../patches/starknet-rust-core" }
+cainome-cairo-serde = { path = "../patches/cainome-cairo-serde" }
 
 [dev-dependencies]
 cairo-native = "0.8.0"

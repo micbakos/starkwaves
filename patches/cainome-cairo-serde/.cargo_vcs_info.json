@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "13aa58734f70c57b4282540ce2dc19e0ea141175"
+  },
+  "path_in_vcs": "crates/cairo-serde"
+}
