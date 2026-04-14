@@ -3,7 +3,7 @@ use super::result::Result;
 use super::ship::Ship;
 use crate::merkle::board_merkle_tree::BoardMerkleTree;
 use crate::types::board_size::BoardSize;
-use crate::types::error::GameError::{AllShipsPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
+use crate::types::error::GameError::{AllShipsAlreadyPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
 use crate::types::fire_report::FireReport;
 use crate::types::{Cell, ShipKind};
 use starknet_rust::core::types::Felt;
@@ -44,7 +44,7 @@ impl Board {
         }
 
         if self.is_board_ready() {
-            return Err(AllShipsPlaced);
+            return Err(AllShipsAlreadyPlaced);
         }
 
         let counts = self.size.ship_kinds_count(&ship.kind);
@@ -1465,7 +1465,7 @@ mod tests {
         let result = board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal));
         assert!(result.is_err(), "Should not be able to place ship when board is ready");
         assert!(
-            matches!(result.unwrap_err(), AllShipsPlaced),
+            matches!(result.unwrap_err(), AllShipsAlreadyPlaced),
             "Error should be AllShipsPlaced"
         );
     }
@@ -1494,7 +1494,6 @@ mod tests {
             result.is_err(),
             "Should not be able to place ship after commitment"
         );
-        println!("{:?}", result.clone().unwrap_err());
         assert!(
             matches!(result.unwrap_err(), BoardAlreadyCommitted),
             "Error should be BoardAlreadyCommitted"

@@ -13,12 +13,12 @@ impl IntoEvents for TransactionReceipt {
         let events: Vec<StarknetEvent> = if let TransactionReceipt::Invoke(invoke) = self {
             invoke.events
         } else {
-            return Err(GameError::ProviderError {
-                error: format!(
+            return Err(GameError::InvalidState(
+                format!(
                     "Expected TransactionReceipt but instead received {:?}",
                     self
-                ),
-            });
+                )
+            ));
         };
 
         Ok(events

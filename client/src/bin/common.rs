@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use dotenv::dotenv;
 use serde_json::Value;
 use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};

@@ -8,7 +8,7 @@ use starknet_rust::core::types::{
     ContractExecutionError, Felt, StarknetError, TransactionExecutionErrorData,
 };
 use starknet_rust::providers::jsonrpc::HttpTransport;
-use starknet_rust::providers::{JsonRpcClient, Provider, ProviderError};
+use starknet_rust::providers::{JsonRpcClient, ProviderError};
 use starknet_rust::signers::LocalWallet;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};

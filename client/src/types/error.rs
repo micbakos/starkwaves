@@ -1,14 +1,14 @@
+use crate::types::board_size::BoardSize;
+use crate::types::{Orientation, ShipKind};
 use starknet_rust::accounts::AccountError;
 use starknet_rust::core::types::{ContractExecutionError, StarknetError};
 use starknet_rust::providers::ProviderError;
-use crate::types::board_size::BoardSize;
-use crate::types::{Orientation, ShipKind};
 use thiserror::Error as ThisError;
 
 pub use starknet_rust::core::codec::Error as CodecError;
 use starknet_rust_tokio_tungstenite::{SubscribeError, SubscriptionReceiveError};
 
-#[derive(Clone, Debug, Eq, ThisError, PartialEq)]
+#[derive(Debug, ThisError)]
 pub enum GameError {
     #[error("A {ship} is not eligible for boards {size} size")]
     ShipIneligible { ship: ShipKind, size: BoardSize },
@@ -41,8 +41,8 @@ pub enum GameError {
     #[error("Board is already committed")]
     BoardAlreadyCommitted,
 
-    #[error("All ships are placed in board")]
-    AllShipsPlaced,
+    #[error("All ships are already placed in board")]
+    AllShipsAlreadyPlaced,
 
     #[error("Game is over")]
     GameOver,
@@ -50,13 +50,23 @@ pub enum GameError {
     #[error("Cannot create a new game. Player is in another game.")]
     PlayerInGame,
 
-    #[error("You have hit the rate limit.")]
-    RateLimited,
-
-    #[error("{error}")]
-    ProviderError {
-        error: String
+    #[error("Transaction {tx_hash} was reverted due to: {reason}")]
+    TxReverted {
+        tx_hash: String,
+        reason: String
     },
+
+    #[error("{0}")]
+    InvalidState(String),
+
+    #[error("{0}")]
+    StarknetProviderError(ProviderError),
+
+    #[error("Subscription error: {0}")]
+    StarknetSubscriptionError(String),
+
+    #[error("Account error: {0}")]
+    AccountError(String),
 
     #[error("It is not your turn to attack.")]
     CannotAttack,
@@ -71,48 +81,29 @@ pub enum GameError {
 impl Into<GameError> for ProviderError {
     fn into(self) -> GameError {
         match self {
-            ProviderError::StarknetError(inner) => {
-                inner.into()
-            }
-            ProviderError::RateLimited => GameError::RateLimited,
-            ProviderError::ArrayLengthMismatch => GameError::ProviderError {
-                error: self.to_string()
-            },
-            ProviderError::Other(internal) => {
-                GameError::ProviderError {
-                    error: internal.to_string()
-                }
-            }
+            ProviderError::StarknetError(error) => error.into(),
+            _ => GameError::StarknetProviderError(self)
         }
     }
 }
 
 impl Into<GameError> for StarknetError {
     fn into(self) -> GameError {
-        match self {
-            StarknetError::ContractError(error_data) => {
-                error_data.revert_error.into()
-            },
-            StarknetError::TransactionExecutionError(error_data) => {
-                error_data.execution_error.into()
-            },
-            _ => GameError::ProviderError { error: self.to_string() },
-        }
-    }
-}
-
-impl Into<GameError> for ContractExecutionError {
-    fn into(self) -> GameError {
-        match self {
-            ContractExecutionError::Nested(nested_error) => {
-                nested_error.error.as_ref().clone().into()
-            }
-            ContractExecutionError::Message(message) => {
-                match message.as_str() {
-                    s if s.contains("is already in another game.") => GameError::PlayerInGame,
-                    _ => GameError::ProviderError { error: message },
+        match self.clone() {
+            StarknetError::ContractError(contract_error) => {
+                match contract_error.revert_error {
+                    ContractExecutionError::Nested(_) => {
+                        GameError::StarknetProviderError(ProviderError::StarknetError(self))
+                    }
+                    ContractExecutionError::Message(message) => {
+                        match message.as_str() {
+                            s if s.contains("is already in another game.") => GameError::PlayerInGame,
+                            _ => GameError::StarknetProviderError(ProviderError::StarknetError(self))
+                        }
+                    }
                 }
             }
+            _ => GameError::StarknetProviderError(ProviderError::StarknetError(self))
         }
     }
 }
@@ -124,39 +115,22 @@ where
     fn into(self) -> GameError {
         match self {
             AccountError::Signing(error) => {
-                GameError::ProviderError { error: format!("{:?}", error) }
+                GameError::AccountError(format!("{:?}", error))
             }
             AccountError::Provider(error) => error.into(),
-            AccountError::ClassHashCalculation(error) => {
-                GameError::ProviderError { error: error.to_string() }
-            }
-            AccountError::FeeOutOfRange => {
-                GameError::ProviderError { error: "Fee out of range".to_string() }
-            }
+            _ => GameError::AccountError(format!("{:?}", self))
         }
     }
 }
 
 impl Into<GameError> for SubscribeError {
     fn into(self) -> GameError {
-        GameError::ProviderError { error: format!("{:?}", self) }
+        GameError::StarknetSubscriptionError(format!("{:?}", self))
     }
 }
 
 impl Into<GameError> for SubscriptionReceiveError {
     fn into(self) -> GameError {
-        GameError::ProviderError { error: format!("{:?}", self) }
-    }
-}
-
-impl Into<GameError> for CodecError {
-    fn into(self) -> GameError {
-        GameError::ProviderError { error: format!("{:?}", self) }
-    }
-}
-
-impl Into<GameError> for String {
-    fn into(self) -> GameError {
-        GameError::ProviderError { error: format!("{:?}", self) }
+        GameError::StarknetSubscriptionError(format!("{:?}", self))
     }
 }

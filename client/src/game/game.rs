@@ -8,7 +8,7 @@ use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
 use crate::types::result::Result;
 use crate::types::{Board, Ship};
-use crate::utils::wait_for_receipt;
+use crate::utils::wait_success;
 use async_trait::async_trait;
 use cainome::cairo_serde::ContractAddress;
 use log::info;
@@ -110,7 +110,7 @@ where
             e.into()
         })?;
         let provider = player.provider();
-        let (events, block_number) = wait_for_receipt(provider, result.transaction_hash)
+        let (events, block_number) = wait_success(provider, result.transaction_hash)
             .await
             .map_err(|e| e.into())
             .and_then(|info| {
@@ -211,12 +211,12 @@ where
                 Ok(game)
             }
             _ => {
-                Err(GameError::ProviderError {
-                    error: format!(
+                Err(GameError::InvalidState(
+                    format!(
                         "Expected PlayerEntererLobby or PlayersAssembled but received {:?}",
                         event
-                    ),
-                })
+                    )
+                ))
             }
         }
     }
@@ -231,6 +231,7 @@ where
             if game_data.board.is_board_ready() {
                 callback.on_update(GameUpdate::ShipsPlaced).await;
                 let root = game_data.board.commit(salt)?;
+                info!("Committing root {}", root);
                 callback.on_update(GameUpdate::BoardCommitted).await;
                 let game_id = game_data.game_id;
                 Some((root, game_id))
@@ -243,7 +244,7 @@ where
             let contract = self.contract();
             let execution = contract.commit_board(&root, &game_id);
             let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-            wait_for_receipt(self.player.provider(), result.transaction_hash)
+            wait_success(self.player.provider(), result.transaction_hash)
                 .await
                 .map_err(|e| e.into())?;
         }
@@ -265,7 +266,7 @@ where
         let contract = self.contract();
         let execution = contract.attack(&game_id, &x, &y);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        wait_for_receipt(self.player.provider(), result.transaction_hash)
+        wait_success(self.player.provider(), result.transaction_hash)
             .await
             .map_err(|e| e.into())?;
 
@@ -296,7 +297,7 @@ where
         let contract = self.contract();
         let execution = contract.defend(&game_id, &report.salted_fire_status(salt), &report.proof);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        wait_for_receipt(self.player.provider(), result.transaction_hash)
+        wait_success(self.player.provider(), result.transaction_hash)
             .await
             .map_err(|e| e.into())?;
 
@@ -314,9 +315,10 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.reveal(&game_id, &board.to_array()?, &salt.into());
+        let execution = contract.reveal(&game_id, &board.to_array()?, &salt.into())
+            .gas_estimate_multiplier(5.0);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        let receipt_info = wait_for_receipt(self.player.provider(), result.transaction_hash)
+        let receipt_info = wait_success(self.player.provider(), result.transaction_hash)
             .await
             .map_err(|e| e.into())?;
 
