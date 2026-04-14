@@ -138,4 +138,3 @@ pub fn verify(
 
     current_hash == root
 }
-

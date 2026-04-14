@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::compat::cairo::cairo_runner::CairoRunner;
+    use crate::compat::cairo::panic_result::CairoError;
     use cairo_native::Value;
     use starknet_rust::core::crypto::pedersen_hash;
     use starknet_rust::core::types::Felt;
@@ -9,7 +10,6 @@ mod tests {
     use starkwaves_client::types::Board;
     use starkwaves_client::types::{Orientation, Ship, ShipKind};
     use std::path::Path;
-    use crate::compat::cairo::panic_result::CairoError;
 
     pub struct CairoMerkleRunner {
         runner: CairoRunner,
@@ -20,6 +20,27 @@ mod tests {
             let sierra_path = env!("MERKLE_SIERRA_PATH");
             let runner = CairoRunner::new(Path::new(sierra_path));
             CairoMerkleRunner { runner }
+        }
+
+        pub fn compute_merkle_root(&self, board: Vec<u8>, salt: u64) -> Felt {
+            self.runner
+                .execute_cairo_fn(
+                    "merkle::compute_merkle_root",
+                    vec![
+                        Value::Array(board.iter().map(|i| Value::Uint8(*i)).collect()),
+                        Value::Felt252(salt.into()),
+                    ],
+                )
+                .and_then(|value: Value| {
+                    match value {
+                        Value::Felt252(felt) => Ok(felt),
+                        _ => Err(CairoError::from_values(
+                            vec![value],
+                            "Expected Felt252 enum as return type of compute_merkle_root",
+                        ))
+                    }
+                })
+                .expect("Failed to compute merkle root")
         }
 
         pub fn verify(
@@ -63,6 +84,29 @@ mod tests {
                 })
                 .expect("Failed to verify")
         }
+    }
+
+    #[test]
+    fn compare_merkle_roots() {
+        let cairo_merkle_runner = CairoMerkleRunner::new();
+
+        let salt = 6894822432938596103;
+        let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+        let ships = vec![
+            Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal),
+            Ship::new(ShipKind::Destroyer, 1, 0, Orientation::Horizontal),
+        ];
+
+        let mut board = Board::new(board_size);
+        for ship in ships.clone() {
+            board.place_ship(ship).expect("Ship placement failed");
+        }
+        let rs_root = board.commit(salt).expect("Should commit");
+        let cairo_root = cairo_merkle_runner.compute_merkle_root(board.to_array().unwrap(), salt);
+
+        println!("Cairo root = {}", cairo_root);
+        println!("RS root = {}", rs_root);
+        assert_eq!(rs_root, cairo_root);
     }
 
     #[test]

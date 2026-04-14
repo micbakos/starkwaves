@@ -15,4 +15,13 @@ impl rs_merkle::Hasher for PedersenHasher {
         let hash = pedersen_hash(&left, &right);
         hash.to_bytes_be()
     }
+
+    fn concat_and_hash(left: &Self::Hash, right: Option<&Self::Hash>) -> Self::Hash {
+        let left_felt = Felt::from_bytes_be_slice(left);
+        let right_felt = match right {
+            Some(r) => Felt::from_bytes_be_slice(r),
+            None => left_felt,
+        };
+        pedersen_hash(&left_felt, &right_felt).to_bytes_be()
+    }
 }

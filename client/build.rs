@@ -21,7 +21,7 @@ fn main() {
         println!("cargo:rerun-if-changed=../contract/merkle/Scarb.toml");
         println!("cargo:rerun-if-changed=../contract/merkle/src");
 
-        let sierra_file = build_merkle(BUILD_RELEASE);
+        let sierra_file = build_merkle(false);
         println!(
             "cargo:rustc-env=MERKLE_SIERRA_PATH={}",
             sierra_file.display()

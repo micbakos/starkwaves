@@ -6,7 +6,7 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, SyscallResultTrait};
 use starkwaves::events::{
-    AttackEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent, HitEvent,
+    AttackEvent, AttackResultEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent,
     PlayerEnteredLobbyEvent, PlayersAssembledEvent,
 };
 use starkwaves::starkwaves::Starkwaves::Event;
@@ -152,7 +152,7 @@ fn test_integration_start_game_emits_event() {
                     contract_address,
                     Event::PlayersAssembled(
                         PlayersAssembledEvent {
-                            player_a: player_a(), player_b: player_b(), game_id,
+                            player_a: player_a(), player_b: player_b(), game_id, board_size,
                         },
                     ),
                 ),
@@ -715,7 +715,7 @@ fn test_players_assembled_event_on_game_creation() {
                     contract_address,
                     Event::PlayersAssembled(
                         PlayersAssembledEvent {
-                            game_id, player_a: player_a(), player_b: player_b(),
+                            game_id, player_a: player_a(), player_b: player_b(), board_size,
                         },
                     ),
                 ),
@@ -773,8 +773,8 @@ fn test_game_started_event_only_after_both_commits() {
 }
 
 #[test]
-fn test_hit_event_only_on_actual_hits() {
-    // Test that HitEvent is only emitted for hits, not misses
+fn test_attack_result_event_on_miss_has_no_ship_kind() {
+    // Test that AttackResultEvent is emitted with ship_kind: None on a miss
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
     let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
@@ -794,7 +794,7 @@ fn test_hit_event_only_on_actual_hits() {
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.commit_board(root_b, game_id);
 
-    // Test 1: Attack a miss position - should NOT emit HitEvent
+    // Attack a miss position
     start_cheat_caller_address(contract_address, player_a());
     dispatcher.attack(game_id, 5, 5); // Water
 
@@ -806,34 +806,30 @@ fn test_hit_event_only_on_actual_hits() {
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.defend(game_id, status, proof);
 
-    // Verify no HitEvent was emitted - use assert_not_emitted with a dummy HitEvent
+    // Verify AttackResultEvent was emitted with ship_kind: None
     spy
-        .assert_not_emitted(
+        .assert_emitted(
             @array![
                 (
                     contract_address,
-                    Event::Hit(
-                        HitEvent {
+                    Event::AttackResult(
+                        AttackResultEvent {
                             game_id,
                             attacker: player_a(),
                             defender: player_b(),
                             x: 5,
                             y: 5,
-                            ship_kind: ShipKind::Destroyer,
+                            ship_kind: None,
                         },
                     ),
                 ),
             ],
         );
-    // Test 2: Player B attacks Player A's board
-// First we need Player A to have committed a valid root
-// But Player A committed 0x111111, not a valid merkle root.
-// Let's restart test with proper setup for hit verification
 }
 
 #[test]
-fn test_hit_event_emitted_on_actual_hit() {
-    // Test that HitEvent IS emitted for actual hits
+fn test_attack_result_event_emitted_on_actual_hit() {
+    // Test that AttackResultEvent IS emitted with ship_kind: Some(_) on actual hits
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
     let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
@@ -872,20 +868,20 @@ fn test_hit_event_emitted_on_actual_hit() {
     start_cheat_caller_address(contract_address, player_b());
     dispatcher.defend(game_id, status, proof);
 
-    // Should emit HitEvent
+    // Should emit AttackResultEvent with ship_kind: Some(Destroyer)
     spy
         .assert_emitted(
             @array![
                 (
                     contract_address,
-                    Event::Hit(
-                        HitEvent {
+                    Event::AttackResult(
+                        AttackResultEvent {
                             game_id,
                             attacker: player_a(),
                             defender: player_b(),
                             x: 0,
                             y: 0,
-                            ship_kind: ShipKind::Destroyer,
+                            ship_kind: Some(ShipKind::Destroyer),
                         },
                     ),
                 ),
