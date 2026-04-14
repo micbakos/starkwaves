@@ -4,7 +4,7 @@ use log::LevelFilter;
 use starkwaves_client::game::game::{Game, GameCallback, GameUpdate};
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
 use starkwaves_client::types::environment::Environment;
-use starkwaves_client::types::game_over_outcome::{GameOverOutcome, LossReason};
+use starkwaves_client::types::game_over_outcome::{GameOverOutcome, Reason};
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
 use std::process::exit;
@@ -28,7 +28,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -55,7 +55,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         player,
         BoardSize::Smaller(SmallerBoardSize::SixBySix),
         Arc::new(print_callback.clone())
-    ).await?;
+    ).await.unwrap_or_else(|err| {
+        eprintln!("{err}");
+        exit(-1);
+    });
 
     {
         let game = game.lock().await;
@@ -73,7 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input.clear();
         raw_input.clear();
         use std::io::BufRead;
-        std::io::stdin().lock().read_until(b'\n', &mut raw_input)?;
+        std::io::stdin().lock().read_until(b'\n', &mut raw_input).unwrap_or_else(|err| {
+            eprintln!("Failed to read prompt {err}");
+            exit(-1);
+        });
         input = String::from_utf8_lossy(&raw_input).into_owned();
 
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
@@ -130,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok::<_, Box<dyn std::error::Error>>(())
         }.await {
-            eprintln!("Error: {}", e);
+            eprintln!("{e}");
         }
     }
 }
@@ -176,11 +182,16 @@ impl GameCallback for PrintCallback {
             }
             GameUpdate::GameOver { outcome } => {
                 match outcome {
-                    GameOverOutcome::Won => println!("Game over, YOU WON!"),
+                    GameOverOutcome::Won(reason) => {
+                        println!("Game over, YOU WON!");
+                        if reason == Reason::FailedToProvideProof {
+                            println!("The opponent failed to provide proof of their board");
+                        }
+                    },
                     GameOverOutcome::Lost(reason) => {
                         match reason {
-                            LossReason::FairGame => println!("Game over, You Lost :("),
-                            LossReason::FailedToProvideProof => println!("Game over, you failed to provide proof of your board"),
+                            Reason::FairGame => println!("Game over, You Lost :("),
+                            Reason::FailedToProvideProof => println!("Game over, you failed to provide proof of your board"),
                         }
                     }
                 }

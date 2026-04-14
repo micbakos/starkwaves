@@ -3,12 +3,12 @@ use cainome::cairo_serde::ContractAddress;
 
 #[derive(Debug, Clone)]
 pub enum GameOverOutcome {
-    Won,
-    Lost(LossReason),
+    Won(Reason),
+    Lost(Reason),
 }
 
-#[derive(Debug, Clone)]
-pub enum LossReason {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reason {
     FairGame,
     FailedToProvideProof,
 }
@@ -18,16 +18,20 @@ impl GameOverOutcome {
         match outcome {
             Outcome::Fair(winner) => {
                 if winner == player_address {
-                    GameOverOutcome::Won
+                    GameOverOutcome::Won(Reason::FairGame)
                 } else {
-                    GameOverOutcome::Lost(LossReason::FairGame)
+                    GameOverOutcome::Lost(Reason::FairGame)
                 }
             }
-            Outcome::FailedToProvideProof(_) => {
-                GameOverOutcome::Lost(LossReason::FailedToProvideProof)
+            Outcome::FailedToProvideProof(cheater) => {
+                if cheater == player_address {
+                    GameOverOutcome::Lost(Reason::FailedToProvideProof)
+                } else {
+                    GameOverOutcome::Won(Reason::FailedToProvideProof)
+                }
             }
             Outcome::Null => {
-                GameOverOutcome::Lost(LossReason::FailedToProvideProof)
+                GameOverOutcome::Lost(Reason::FailedToProvideProof)
             }
         }
     }

@@ -90,20 +90,36 @@ impl Into<GameError> for ProviderError {
 impl Into<GameError> for StarknetError {
     fn into(self) -> GameError {
         match self.clone() {
+            StarknetError::TransactionExecutionError(tx_execution_error) => {
+                tx_execution_error.execution_error.try_into().unwrap_or(
+                    GameError::StarknetProviderError(ProviderError::StarknetError(self))
+                )
+            },
             StarknetError::ContractError(contract_error) => {
-                match contract_error.revert_error {
-                    ContractExecutionError::Nested(_) => {
-                        GameError::StarknetProviderError(ProviderError::StarknetError(self))
-                    }
-                    ContractExecutionError::Message(message) => {
-                        match message.as_str() {
-                            s if s.contains("is already in another game.") => GameError::PlayerInGame,
-                            _ => GameError::StarknetProviderError(ProviderError::StarknetError(self))
-                        }
-                    }
-                }
+                contract_error.revert_error.try_into().unwrap_or(
+                    GameError::StarknetProviderError(ProviderError::StarknetError(self))
+                )
             }
             _ => GameError::StarknetProviderError(ProviderError::StarknetError(self))
+        }
+    }
+}
+
+impl TryInto<GameError> for ContractExecutionError {
+    type Error = ();
+
+    fn try_into(self) -> Result<GameError, Self::Error> {
+        match self {
+            ContractExecutionError::Nested(inner) => {
+                let s = inner.error.as_ref();
+                s.clone().try_into()
+            }
+            ContractExecutionError::Message(message) => {
+                match message.as_str() {
+                    s if s.contains("is already in another game.") => Ok(GameError::PlayerInGame),
+                    _ => Err(())
+                }
+            }
         }
     }
 }

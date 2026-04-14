@@ -106,7 +106,6 @@ where
 
         let execution = contract.request_start_game(&board_size.into());
         let result = execution.send().await.map_err(|e| {
-            eprintln!("{:?}", e);
             e.into()
         })?;
         let provider = player.provider();
@@ -377,7 +376,6 @@ where
             .await
             .expect("WebSocket connection failed");
 
-        println!("Subscribing to block id {}", block_number);
         let events = EventSubscriptionOptions {
             from_address: Some(AddressFilter::Single(contract_address)),
             keys: Some(in_lobby_event_keys()),
@@ -401,7 +399,6 @@ where
                         .try_into()
                         .expect("EmittedEvent should be converted to GameEvent");
 
-                    println!("Received event: {:?}", game_event);
                     if let Event::PlayersAssembled(event) = game_event.clone() {
                         if board_size != event.board_size.into() {
                             continue;
