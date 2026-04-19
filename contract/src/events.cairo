@@ -42,7 +42,8 @@ pub struct AttackResultEvent {
     pub defender: ContractAddress,
     pub x: u8,
     pub y: u8,
-    pub ship_kind: Option<ShipKind>,
+    pub hit: bool,
+    pub destroyed_ship_kind: Option<ShipKind>,
 }
 
 #[derive(Drop, starknet::Event, Serde)]

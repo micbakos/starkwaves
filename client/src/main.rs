@@ -167,9 +167,12 @@ impl GameCallback for PrintCallback {
             GameUpdate::IncomingAttack { x, y } => {
                 println!("Incoming attack at ({}, {})", x, y);
             }
-            GameUpdate::AttackResult { x, y, hit } => {
+            GameUpdate::AttackResult { x, y, hit, destroyed_ship } => {
                 if hit {
                     println!("Your attack at ({}, {}) was a HIT!", x, y);
+                    if destroyed_ship.is_some() {
+                        println!("Opponent's {} was destroyed", destroyed_ship.unwrap());
+                    }
                 } else {
                     println!("Your attack at ({}, {}) missed.", x, y);
                 }

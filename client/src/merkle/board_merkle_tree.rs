@@ -11,7 +11,7 @@ pub struct BoardMerkleTree {
 
 /// Produces a Merkle Tree that uses Pedersen hash for node hashing
 impl BoardMerkleTree {
-    pub fn build(board_array: Vec<u8>, salt: u64) -> Self {
+    pub fn build(board_array: Vec<bool>, salt: u64) -> Self {
         let salt_felt = Felt::from(salt);
 
         let leaves = board_array

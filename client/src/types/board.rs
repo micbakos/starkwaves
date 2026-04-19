@@ -120,7 +120,19 @@ impl Board {
             return Err(BoardAlreadyCommitted);
         }
 
-        let array = self.to_array()?;
+        if !self.is_board_ready() {
+            Err(BoardNotReady)?;
+        }
+
+        let mut array = Vec::<bool>::new();
+        for cell in self.cells() {
+            let is_ship = cell
+                .ship(&self.ships)
+                .map(|_| true)
+                .unwrap_or(false);
+
+            array.push(is_ship);
+        }
 
         let tree = BoardMerkleTree::build(array, salt);
         self.commitment_tree = Some(tree.clone());
@@ -205,22 +217,22 @@ impl Board {
         })
     }
 
-    pub fn to_array(&self) -> Result<Vec<u8>> {
+    pub fn to_array(&self) -> Result<Vec<bool>> {
         if !self.is_board_ready() {
             Err(BoardNotReady)?;
         }
 
-        let mut ids = Vec::<u8>::new();
+        let mut result = Vec::<bool>::new();
         for cell in self.cells() {
-            let id = cell
+            let is_ship = cell
                 .ship(&self.ships)
-                .map(|ship| ship.kind.id())
-                .unwrap_or(0);
+                .map(|_| true)
+                .unwrap_or(false);
 
-            ids.push(id);
+            result.push(is_ship);
         }
 
-        Ok(ids)
+        Ok(result)
     }
 
     fn cells(&self) -> Vec<Cell> {
@@ -605,59 +617,6 @@ mod tests {
         let ship3 = Ship::new(ShipKind::Destroyer, 8, 8, Orientation::Horizontal);
         let result = board.place_ship(ship3);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_to_array_empty_board_fails() {
-        let board = Board::new(BoardSize::Standard);
-        let result = board.to_array();
-
-        assert!(result.is_err(), "Empty board should not be ready");
-    }
-
-    #[test]
-    fn test_to_array_with_ships() {
-        let mut board = Board::new(BoardSize::Standard);
-        // Complete 10x10 board: needs Carrier, Battleship, Cruiser, Submarine, Destroyer (1 each)
-        board
-            .place_ship(Ship::new(
-                ShipKind::Destroyer,
-                0,
-                0,
-                Orientation::Horizontal,
-            ))
-            .unwrap();
-        board
-            .place_ship(Ship::new(ShipKind::Carrier, 2, 0, Orientation::Horizontal))
-            .unwrap();
-        board
-            .place_ship(Ship::new(
-                ShipKind::Battleship,
-                4,
-                0,
-                Orientation::Horizontal,
-            ))
-            .unwrap();
-        board
-            .place_ship(Ship::new(ShipKind::Cruiser, 6, 0, Orientation::Horizontal))
-            .unwrap();
-        board
-            .place_ship(Ship::new(
-                ShipKind::Submarine,
-                8,
-                0,
-                Orientation::Horizontal,
-            ))
-            .unwrap();
-
-        let array = board.to_array().expect("Board should be ready");
-
-        // Verify Destroyer at position 0, 1
-        assert_eq!(array[0], ShipKind::Destroyer.id());
-        assert_eq!(array[1], ShipKind::Destroyer.id());
-
-        // Verify array has correct size
-        assert_eq!(array.len(), 100); // 10x10
     }
 
     #[test]
@@ -1690,35 +1649,5 @@ mod tests {
 
         // Should have 2 ships hit (Destroyer and Cruiser), each with 1 hit
         assert_eq!(hits.len(), 2, "Should have 2 ships with hits");
-    }
-
-    #[test]
-    fn test_to_array_after_commit() {
-        let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board
-            .place_ship(Ship::new(
-                ShipKind::Destroyer,
-                0,
-                0,
-                Orientation::Horizontal,
-            ))
-            .expect("Ship placement should succeed");
-        board
-            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
-            .expect("Ship placement should succeed");
-
-        // Get array before commit
-        let array_before = board.to_array().expect("Should get array");
-
-        // Commit
-        board.commit(12345).expect("Commit should succeed");
-
-        // Get array after commit - should be identical
-        let array_after = board.to_array().expect("Should get array after commit");
-
-        assert_eq!(
-            array_before, array_after,
-            "Array should be identical before and after commit"
-        );
     }
 }

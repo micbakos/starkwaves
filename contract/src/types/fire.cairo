@@ -4,8 +4,8 @@ use super::ship::ShipKind;
 
 #[derive(Debug, Drop, Serde, Copy)]
 pub enum FireStatus {
-    Miss: felt252, // Felt is for pedersen(ship_kind.id, salt) 
-    Hit: (ShipKind, felt252),
+    Miss: felt252, // Felt is for pedersen(0, salt) 
+    Hit: (Option<ShipKind>, felt252) // Felt is for pedersen(1, salt) 
 }
 
 impl DisplayImpl of Display<FireStatus> {
@@ -41,5 +41,6 @@ pub struct HitReport {
     pub defender: ContractAddress,
     pub x: u8,
     pub y: u8,
-    pub hit: Option<ShipKind>,
+    pub hit: bool,
+    pub destroyed: Option<ShipKind>,
 }

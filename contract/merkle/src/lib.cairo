@@ -1,4 +1,4 @@
-pub fn compute_merkle_root(board: Array<u8>, salt: felt252) -> felt252 {
+pub fn compute_merkle_root(board: Array<bool>, salt: felt252) -> felt252 {
     let mut leaves: Array<felt252> = array![];
     let board_span = board.span();
     let mut i = 0;
@@ -47,7 +47,7 @@ fn compute_merkle_root_recursive(leaves: Span<felt252>) -> felt252 {
     compute_merkle_root_recursive(parent_level.span())
 }
 
-pub fn generate_proof(board: Span<u8>, salt: felt252, leaf_index: u32) -> Array<felt252> {
+pub fn generate_proof(board: Span<bool>, salt: felt252, leaf_index: u32) -> Array<felt252> {
     let mut leaves: Array<felt252> = array![];
     let mut i = 0;
     while i < board.len() {

@@ -141,7 +141,6 @@ pub impl GameImpl of GameTrait {
             self.player_a_root
         }
             .expect('Commit root should exist.');
-        println!("Defending at offset {}", offset);
         let verified = merkle::verify(status.salted_status(), proof, defending_root, offset);
 
         if !verified {
@@ -151,12 +150,13 @@ pub impl GameImpl of GameTrait {
 
         let (x, y) = self.offset_to_cartesian(offset);
         let mut hit_result = HitReport {
-            attacker: attacking_player, defender: player, x, y, hit: None,
+            attacker: attacking_player, defender: player, x, y, hit: false, destroyed: None,
         };
-        if let FireStatus::Hit((kind, _)) = status {
+        if let FireStatus::Hit((maybe_destroyed_kind, _)) = status {
             self.increment_success_hits(attacking_player);
 
-            hit_result.hit = Some(kind);
+            hit_result.hit = true;
+            hit_result.destroyed = maybe_destroyed_kind;
 
             let won = self.check_won(@attacking_player);
             if won {

@@ -5,9 +5,9 @@ mod tests {
     use cairo_native::Value;
     use starknet_rust::core::crypto::pedersen_hash;
     use starknet_rust::core::types::Felt;
+    use starkwaves_client::types::Board;
     use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
     use starkwaves_client::types::fire_report::FireStatus;
-    use starkwaves_client::types::Board;
     use starkwaves_client::types::{Orientation, Ship, ShipKind};
     use std::path::Path;
 
@@ -22,12 +22,18 @@ mod tests {
             CairoMerkleRunner { runner }
         }
 
-        pub fn compute_merkle_root(&self, board: Vec<u8>, salt: u64) -> Felt {
+        pub fn compute_merkle_root(&self, board: Vec<bool>, salt: u64) -> Felt {
             self.runner
                 .execute_cairo_fn(
                     "merkle::compute_merkle_root",
                     vec![
-                        Value::Array(board.iter().map(|i| Value::Uint8(*i)).collect()),
+                        Value::Array(board.iter().map(|i| {
+                            if *i == true {
+                                Value::Felt252(Felt::ONE)
+                            } else {
+                                Value::Felt252(Felt::ZERO)
+                            }
+                        }).collect()),
                         Value::Felt252(salt.into()),
                     ],
                 )
@@ -48,7 +54,7 @@ mod tests {
             salted_status: Felt,
             proof: Vec<Felt>,
             root: Felt,
-            index: usize
+            index: usize,
         ) -> bool {
             self.runner
                 .execute_cairo_fn(
@@ -135,7 +141,7 @@ mod tests {
             report.salted_status_value(salt),
             report.proof.clone(),
             root,
-            0
+            0,
         );
 
         assert!(cairo_verified);
@@ -165,12 +171,7 @@ mod tests {
         // so let's hash water with salt (what an irony...)
         let fake_salted_status = pedersen_hash(&Felt::from(0), &Felt::from(salt));
 
-        let cairo_verified = cairo_merkle_runner.verify(
-            fake_salted_status,
-            proof,
-            root,
-            0
-        );
+        let cairo_verified = cairo_merkle_runner.verify(fake_salted_status, proof, root, 0);
 
         assert!(!cairo_verified);
     }

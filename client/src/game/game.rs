@@ -7,7 +7,7 @@ use crate::types::fire_report::FireReport;
 use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
 use crate::types::result::Result;
-use crate::types::{Board, Ship};
+use crate::types::{Board, Ship, ShipKind};
 use crate::utils::wait_success;
 use async_trait::async_trait;
 use cainome::cairo_serde::ContractAddress;
@@ -50,6 +50,7 @@ pub enum GameUpdate {
         x: u8,
         y: u8,
         hit: bool,
+        destroyed_ship: Option<ShipKind>
     },
     /// You were hit at the given position
     YouWereHit {
@@ -294,7 +295,7 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.defend(&game_id, &report.salted_fire_status(salt), &report.proof);
+        let execution = contract.defend(&game_id, &report.contract_fire_status(salt), &report.proof);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
         wait_success(self.player.provider(), result.transaction_hash)
             .await
@@ -585,17 +586,18 @@ where
             }
             Event::AttackResult(event) => {
                 let callback = self.callback.clone();
-                let hit = event.ship_kind.is_some();
+                let destroyed_ship = event.destroyed_ship_kind.is_some();
                 let player_address = self.player_address();
 
                 let in_game = self.in_game_data()?;
                 if player_address == event.attacker {
-                    in_game.board.track_launched_fire(event.x, event.y, hit);
+                    in_game.board.track_launched_fire(event.x, event.y, destroyed_ship);
                     callback
                         .on_update(GameUpdate::AttackResult {
                             x: event.x,
                             y: event.y,
-                            hit,
+                            hit: event.hit,
+                            destroyed_ship: event.destroyed_ship_kind.map(|k| k.into())
                         })
                         .await;
 
@@ -604,7 +606,7 @@ where
                         current_attack: None,
                     });
                 } else {
-                    if hit {
+                    if destroyed_ship {
                         callback
                             .on_update(GameUpdate::YouWereHit {
                                 x: event.x,

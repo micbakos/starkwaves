@@ -142,7 +142,7 @@ pub impl LargerBoardSizeImpl of BoardSizeTrait<LargerBoardSize> {
     }
 }
 
-pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
+pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<bool> {
     let mut board: Felt252Dict<u8> = Default::default();
 
     let offset = |x: u8, y: u8| -> felt252 {
@@ -169,10 +169,11 @@ pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<u8> {
         }
     }
 
-    let mut board_array: Array<u8> = ArrayTrait::new();
+    let mut board_array: Array<bool> = ArrayTrait::new();
     let array_size: u32 = board_size.into() * board_size.into();
     for i in 0..array_size {
-        board_array.append(board.get(i.into()));
+        let ship_id = board.get(i.into());
+        board_array.append(ship_id != 0);
     }
 
     return board_array;

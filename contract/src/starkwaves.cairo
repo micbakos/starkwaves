@@ -152,7 +152,8 @@ pub mod Starkwaves {
                             defender: report.defender,
                             x: report.x,
                             y: report.y,
-                            ship_kind: report.hit,
+                            hit: report.hit,
+                            destroyed_ship_kind: report.destroyed,
                         },
                     )
             }

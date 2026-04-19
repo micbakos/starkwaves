@@ -1,5 +1,5 @@
 use crate::types::contract::starkwaves::{
-    Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind
+    Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind,
 };
 use crate::types::error::GameError;
 use crate::types::{Orientation, Ship, ShipKind};
@@ -58,6 +58,19 @@ impl Into<ContractShipKind> for ShipKind {
             ShipKind::Submarine => ContractShipKind::Submarine,
             ShipKind::Destroyer => ContractShipKind::Destroyer,
             ShipKind::SuperCarrier => ContractShipKind::SuperCarrier,
+        }
+    }
+}
+
+impl Into<ShipKind> for ContractShipKind {
+    fn into(self) -> ShipKind {
+        match self {
+            ContractShipKind::Carrier => ShipKind::Carrier,
+            ContractShipKind::Battleship => ShipKind::Battleship,
+            ContractShipKind::Cruiser => ShipKind::Cruiser,
+            ContractShipKind::Submarine => ShipKind::Submarine,
+            ContractShipKind::Destroyer => ShipKind::Destroyer,
+            ContractShipKind::SuperCarrier => ShipKind::SuperCarrier,
         }
     }
 }

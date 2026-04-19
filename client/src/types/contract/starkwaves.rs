@@ -129,7 +129,8 @@ pub struct AttackResultEvent {
     pub defender: cainome::cairo_serde::ContractAddress,
     pub x: u8,
     pub y: u8,
-    pub ship_kind: Option<ShipKind>,
+    pub hit: bool,
+    pub destroyed_ship_kind: Option<ShipKind>,
 }
 impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
     type RustType = Self;
@@ -148,7 +149,8 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
             );
         __size += u8::cairo_serialized_size(&__rust.x);
         __size += u8::cairo_serialized_size(&__rust.y);
-        __size += Option::<ShipKind>::cairo_serialized_size(&__rust.ship_kind);
+        __size += bool::cairo_serialized_size(&__rust.hit);
+        __size += Option::<ShipKind>::cairo_serialized_size(&__rust.destroyed_ship_kind);
         __size
     }
     fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
@@ -164,7 +166,8 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
             );
         __out.extend(u8::cairo_serialize(&__rust.x));
         __out.extend(u8::cairo_serialize(&__rust.y));
-        __out.extend(Option::<ShipKind>::cairo_serialize(&__rust.ship_kind));
+        __out.extend(bool::cairo_serialize(&__rust.hit));
+        __out.extend(Option::<ShipKind>::cairo_serialize(&__rust.destroyed_ship_kind));
         __out
     }
     fn cairo_deserialize(
@@ -190,15 +193,20 @@ impl cainome::cairo_serde::CairoSerde for AttackResultEvent {
         __offset += u8::cairo_serialized_size(&x);
         let y = u8::cairo_deserialize(__felts, __offset)?;
         __offset += u8::cairo_serialized_size(&y);
-        let ship_kind = Option::<ShipKind>::cairo_deserialize(__felts, __offset)?;
-        __offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
+        let hit = bool::cairo_deserialize(__felts, __offset)?;
+        __offset += bool::cairo_serialized_size(&hit);
+        let destroyed_ship_kind = Option::<
+            ShipKind,
+        >::cairo_deserialize(__felts, __offset)?;
+        __offset += Option::<ShipKind>::cairo_serialized_size(&destroyed_ship_kind);
         Ok(AttackResultEvent {
             game_id,
             attacker,
             defender,
             x,
             y,
-            ship_kind,
+            hit,
+            destroyed_ship_kind,
         })
     }
 }
@@ -1357,7 +1365,21 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 }
             };
             data_offset += u8::cairo_serialized_size(&y);
-            let ship_kind = match Option::<
+            let hit = match bool::cairo_deserialize(&event.data, data_offset) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "hit",
+                            "AttackResult",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += bool::cairo_serialized_size(&hit);
+            let destroyed_ship_kind = match Option::<
                 ShipKind,
             >::cairo_deserialize(&event.data, data_offset) {
                 Ok(v) => v,
@@ -1365,14 +1387,15 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "ship_kind",
+                            "destroyed_ship_kind",
                             "AttackResult",
                             e,
                         ),
                     );
                 }
             };
-            data_offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
+            data_offset
+                += Option::<ShipKind>::cairo_serialized_size(&destroyed_ship_kind);
             return Ok(
                 Event::AttackResult(AttackResultEvent {
                     game_id,
@@ -1380,7 +1403,8 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     defender,
                     x,
                     y,
-                    ship_kind,
+                    hit,
+                    destroyed_ship_kind,
                 }),
             );
         }
@@ -2054,7 +2078,21 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 }
             };
             data_offset += u8::cairo_serialized_size(&y);
-            let ship_kind = match Option::<
+            let hit = match bool::cairo_deserialize(&event.data, data_offset) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "hit",
+                            "AttackResult",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += bool::cairo_serialized_size(&hit);
+            let destroyed_ship_kind = match Option::<
                 ShipKind,
             >::cairo_deserialize(&event.data, data_offset) {
                 Ok(v) => v,
@@ -2062,14 +2100,15 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "ship_kind",
+                            "destroyed_ship_kind",
                             "AttackResult",
                             e,
                         ),
                     );
                 }
             };
-            data_offset += Option::<ShipKind>::cairo_serialized_size(&ship_kind);
+            data_offset
+                += Option::<ShipKind>::cairo_serialized_size(&destroyed_ship_kind);
             return Ok(
                 Event::AttackResult(AttackResultEvent {
                     game_id,
@@ -2077,7 +2116,8 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                     defender,
                     x,
                     y,
-                    ship_kind,
+                    hit,
+                    destroyed_ship_kind,
                 }),
             );
         }
@@ -2364,7 +2404,7 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
 #[derive(Debug, Clone)]
 pub enum FireStatus {
     Miss(starknet_rust::core::types::Felt),
-    Hit((ShipKind, starknet_rust::core::types::Felt)),
+    Hit((Option<ShipKind>, starknet_rust::core::types::Felt)),
 }
 impl cainome::cairo_serde::CairoSerde for FireStatus {
     type RustType = Self;
@@ -2376,7 +2416,10 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
                 starknet_rust::core::types::Felt::cairo_serialized_size(val) + 1
             }
             FireStatus::Hit(val) => {
-                <(ShipKind, starknet_rust::core::types::Felt)>::cairo_serialized_size(val) + 1
+                <(
+                    Option<ShipKind>,
+                    starknet_rust::core::types::Felt,
+                )>::cairo_serialized_size(val) + 1
             }
             _ => 0,
         }
@@ -2393,7 +2436,10 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
                 let mut temp = vec![];
                 temp.extend(usize::cairo_serialize(&1usize));
                 temp.extend(
-                    <(ShipKind, starknet_rust::core::types::Felt)>::cairo_serialize(val),
+                    <(
+                        Option<ShipKind>,
+                        starknet_rust::core::types::Felt,
+                    )>::cairo_serialize(val),
                 );
                 temp
             }
@@ -2421,7 +2467,7 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
                 Ok(
                     FireStatus::Hit(
                         <(
-                            ShipKind,
+                            Option<ShipKind>,
                             starknet_rust::core::types::Felt,
                         )>::cairo_deserialize(__felts, __offset + 1)?,
                     ),

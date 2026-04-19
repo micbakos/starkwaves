@@ -9,8 +9,8 @@ use starkwaves::events::{AttackEvent, AttackResultEvent, GameOverEvent, GameReve
 use starkwaves::starkwaves::Starkwaves::Event;
 use starkwaves::starkwaves::{IStarkwavesDispatcher, IStarkwavesDispatcherTrait};
 use starkwaves::types::{
-    BoardSize, BoardSizeTrait, FireStatus, Orientation, Outcome, Ship, ShipKind, ShipKindTrait,
-    SmallerBoardSize, create_board,
+    BoardSize, BoardSizeTrait, FireStatus, Orientation, Outcome, Ship, ShipKind, SmallerBoardSize,
+    create_board,
 };
 
 // ===============================
@@ -64,7 +64,7 @@ fn place(
     game_id: felt252,
     ships_a: Span<Ship>,
     ships_b: Span<Ship>,
-) -> (Array<u8>, felt252, Array<u8>, felt252) {
+) -> (Array<bool>, felt252, Array<bool>, felt252) {
     let board_a = create_board(ships_a, 6);
     let board_b = create_board(ships_b, 6);
 
@@ -102,7 +102,9 @@ fn test_e2e_full_game_lifecycle() {
     let board_a_span = board_a.span();
     let board_b_span = board_b.span();
 
-    let turn = |player: ContractAddress, x: u8, y: u8, hit_kind: Option<ShipKind>| {
+    let turn = |
+        player: ContractAddress, x: u8, y: u8, hit: bool, destroyed_kind: Option<ShipKind>,
+    | {
         let (board, salt) = if (player == player_a()) {
             (board_b_span, salt_b)
         } else {
@@ -130,11 +132,11 @@ fn test_e2e_full_game_lifecycle() {
             );
 
         let proof = generate_proof(board, salt, (x * board_size + y).into());
-        let status = hit_kind
-            .map_or(
-                FireStatus::Miss(pedersen(0, salt)),
-                |kind| FireStatus::Hit((kind, pedersen(kind.id().into(), salt))),
-            );
+        let status = if hit {
+            FireStatus::Hit((destroyed_kind, pedersen(true.into(), salt)))
+        } else {
+            FireStatus::Miss(pedersen(false.into(), salt))
+        };
         println!(" => {}", status);
         start_cheat_caller_address(contract_address, opponent);
         dispatcher.defend(game_id, status, proof);
@@ -151,7 +153,7 @@ fn test_e2e_full_game_lifecycle() {
                                 defender: opponent,
                                 x,
                                 y,
-                                ship_kind: hit_kind,
+                                destroyed_ship_kind: destroyed_kind,
                             },
                         ),
                     ),
@@ -159,24 +161,24 @@ fn test_e2e_full_game_lifecycle() {
             );
     };
 
-    turn(player_a(), 0, 0, Some(ShipKind::Cruiser)); // Hit
-    turn(player_b(), 0, 0, Some(ShipKind::Cruiser)); // Hit
+    turn(player_a(), 0, 0, true, None); // Hit
+    turn(player_b(), 0, 0, true, None); // Hit
 
-    turn(player_a(), 4, 4, None); // Miss
-    turn(player_b(), 4, 4, None); // Miss
+    turn(player_a(), 4, 4, false, None); // Miss
+    turn(player_b(), 4, 4, false, None); // Miss
 
-    turn(player_a(), 0, 1, Some(ShipKind::Cruiser)); // Hit
-    turn(player_b(), 0, 1, Some(ShipKind::Cruiser)); // Hit
+    turn(player_a(), 0, 1, true, None); // Hit
+    turn(player_b(), 0, 1, true, None); // Hit
 
-    turn(player_a(), 0, 2, Some(ShipKind::Cruiser)); // Hit
-    turn(player_b(), 0, 2, Some(ShipKind::Cruiser)); // Hit
+    turn(player_a(), 0, 2, true, Some(ShipKind::Cruiser)); // Hit + Destroy
+    turn(player_b(), 0, 2, true, Some(ShipKind::Cruiser)); // Hit + Destroy
 
-    turn(player_a(), 1, 0, Some(ShipKind::Destroyer)); // Hit
-    turn(player_b(), 1, 0, Some(ShipKind::Destroyer)); // Hit
+    turn(player_a(), 1, 0, true, None); // Hit
+    turn(player_b(), 1, 0, true, None); // Hit
 
     let mut spy = spy_events();
 
-    turn(player_a(), 1, 1, Some(ShipKind::Destroyer)); // Hit + Reveal
+    turn(player_a(), 1, 1, true, Some(ShipKind::Destroyer)); // Hit + Destroy + Reveal
 
     spy
         .assert_emitted(

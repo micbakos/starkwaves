@@ -1,20 +1,20 @@
+use crate::types::contract::starkwaves::FireStatus as ContractFireStatus;
 use crate::types::{Ship, ShipKind};
-use std::fmt::{Display, Formatter};
 use starknet_rust::core::crypto::pedersen_hash;
 use starknet_rust::core::types::Felt;
-use crate::types::contract::starkwaves::FireStatus as SaltedFireStatus;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub struct FireReport {
     pub status: FireStatus,
     pub ship_destroyed: Option<Ship>,
-    pub proof: Vec<Felt>
+    pub proof: Vec<Felt>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FireStatus {
     Miss,
-    Hit(ShipKind)
+    Hit(ShipKind),
 }
 
 impl FireReport {
@@ -22,7 +22,7 @@ impl FireReport {
         FireReport {
             status: FireStatus::Miss,
             ship_destroyed: None,
-            proof
+            proof,
         }
     }
 
@@ -30,7 +30,7 @@ impl FireReport {
         FireReport {
             status: FireStatus::Hit(kind),
             ship_destroyed: None,
-            proof
+            proof,
         }
     }
 
@@ -38,28 +38,27 @@ impl FireReport {
         FireReport {
             status: FireStatus::Hit(ship.kind),
             ship_destroyed: Some(ship),
-            proof
+            proof,
         }
     }
 
     pub fn salted_status_value(&self, salt: u64) -> Felt {
         let status = match &self.status {
             FireStatus::Miss => 0,
-            FireStatus::Hit(kind) => kind.id()
+            FireStatus::Hit(_) => 1,
         };
         pedersen_hash(&Felt::from(status), &Felt::from(salt))
     }
 
-    pub fn salted_fire_status(&self, salt: u64) -> SaltedFireStatus {
+    pub fn contract_fire_status(&self, salt: u64) -> ContractFireStatus {
         match &self.status {
             FireStatus::Miss => {
-                let status = pedersen_hash(&Felt::ZERO, &salt.into());
-                SaltedFireStatus::Miss(status)
-            },
-            FireStatus::Hit(kind) => {
-                let id = Felt::from(kind.id());
-                let status = pedersen_hash(&id, &salt.into());
-                SaltedFireStatus::Hit(((*kind).into(), status))
+                let status = self.salted_status_value(salt);
+                ContractFireStatus::Miss(status)
+            }
+            FireStatus::Hit(_) => {
+                let status = self.salted_status_value(salt);
+                ContractFireStatus::Hit((self.ship_destroyed.map(|k| k.kind.into()), status))
             }
         }
     }

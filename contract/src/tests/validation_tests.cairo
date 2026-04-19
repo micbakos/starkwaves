@@ -566,7 +566,7 @@ fn test_generate_proof_verifies() {
     let root = compute_merkle_root(board.clone(), salt);
     let proof = generate_proof(board.span(), salt, 0);
 
-    let value: u8 = *board.get(0).unwrap().unbox();
+    let value: bool = *board.get(0).unwrap().unbox();
     let salted_value = pedersen(value.into(), salt);
     let verified = verify(salted_value, proof, root, 0);
     assert!(verified, "Should verify")
@@ -602,7 +602,7 @@ fn test_correct_value_incorrect_salt_does_not_verify() {
     let root = compute_merkle_root(board.clone(), salt);
     let proof = generate_proof(board.span(), salt, 0);
 
-    let value: u8 = *board.get(0).unwrap().unbox();
+    let value: bool = *board.get(0).unwrap().unbox();
     let salted_value = pedersen(value.into(), 5678);
     let verified = verify(salted_value, proof, root, 0);
     assert!(!verified, "Should not verify")
