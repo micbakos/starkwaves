@@ -1,3 +1,4 @@
+use crate::Ship;
 use crate::types::{BoardSize, FireStatus};
 
 #[starknet::interface]
@@ -12,7 +13,7 @@ pub trait IStarkwaves<TContractState> {
         ref self: TContractState, game_id: felt252, status: FireStatus, proof: Array<felt252>,
     );
 
-    fn reveal(ref self: TContractState, game_id: felt252, board: Array<u8>, salt: felt252);
+    fn reveal(ref self: TContractState, game_id: felt252, ships: Array<Ship>, salt: felt252);
 
     fn reset(ref self: TContractState);
 
@@ -166,11 +167,11 @@ pub mod Starkwaves {
             }
         }
 
-        fn reveal(ref self: ContractState, game_id: felt252, board: Array<u8>, salt: felt252) {
+        fn reveal(ref self: ContractState, game_id: felt252, ships: Array<Ship>, salt: felt252) {
             let player = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            let outcome = game.reveal(player, board, salt);
+            let outcome = game.reveal(player, ships, salt);
 
             if let Some(final_outcome) = outcome {
                 self.open_games_per_player.entry(game.player_a).write(0);

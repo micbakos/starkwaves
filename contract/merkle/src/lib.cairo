@@ -47,12 +47,11 @@ fn compute_merkle_root_recursive(leaves: Span<felt252>) -> felt252 {
     compute_merkle_root_recursive(parent_level.span())
 }
 
-pub fn generate_proof(board: Array<u8>, salt: felt252, leaf_index: u32) -> Array<felt252> {
+pub fn generate_proof(board: Span<u8>, salt: felt252, leaf_index: u32) -> Array<felt252> {
     let mut leaves: Array<felt252> = array![];
-    let board_span = board.span();
     let mut i = 0;
-    while i < board_span.len() {
-        let cell: felt252 = (*board_span.at(i)).into();
+    while i < board.len() {
+        let cell: felt252 = (*board.at(i)).into();
         let hash = core::pedersen::pedersen(cell, salt);
         leaves.append(hash);
         i += 1;

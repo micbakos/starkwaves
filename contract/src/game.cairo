@@ -3,6 +3,7 @@ use crate::types::{
     BoardSize, BoardSizeTrait, FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal,
     OutcomeBeforeRevealTrait, RevealStatus,
 };
+use crate::{Ship, create_board};
 
 #[derive(Debug, Drop, starknet::Store, Clone)]
 pub struct Game {
@@ -140,7 +141,7 @@ pub impl GameImpl of GameTrait {
             self.player_a_root
         }
             .expect('Commit root should exist.');
-
+        println!("Defending at offset {}", offset);
         let verified = merkle::verify(status.salted_status(), proof, defending_root, offset);
 
         if !verified {
@@ -175,16 +176,15 @@ pub impl GameImpl of GameTrait {
     }
 
     fn reveal(
-        ref self: Game, player: ContractAddress, board: Array<u8>, salt: felt252,
+        ref self: Game, player: ContractAddress, ships: Array<Ship>, salt: felt252,
     ) -> Option<Outcome> {
         assert!(self.outcome_before_reveal.is_some(), "The game is not finished yet.");
 
-        let game_board_size: u32 = self.board_size.size().into();
+        let size = self.board_size.size();
+        let board = create_board(ships.span(), size);
+        let board_length: u32 = (size * size).into();
         assert!(
-            board.len() == game_board_size * game_board_size,
-            "The board revealed should be of size {}x{}",
-            game_board_size,
-            game_board_size,
+            board.len() == board_length, "The board revealed should be of size {}x{}", size, size,
         );
 
         if player == self.player_a {

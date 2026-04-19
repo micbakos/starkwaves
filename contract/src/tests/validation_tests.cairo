@@ -1,9 +1,8 @@
 use core::pedersen::pedersen;
-use merkle::{generate_proof, verify};
+use merkle::{compute_merkle_root, generate_proof, verify};
 use starkwaves::types::{Orientation, Ship, ShipKind};
 use starkwaves::validate_and_commit;
 use crate::types::create_board;
-use merkle::compute_merkle_root;
 
 // ===============================
 // Valid Board Tests
@@ -565,7 +564,7 @@ fn test_generate_proof_verifies() {
     let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
-    let proof = generate_proof(board.clone(), salt, 0);
+    let proof = generate_proof(board.span(), salt, 0);
 
     let value: u8 = *board.get(0).unwrap().unbox();
     let salted_value = pedersen(value.into(), salt);
@@ -583,7 +582,7 @@ fn test_fake_value_correct_salt_does_not_verify() {
     let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
-    let proof = generate_proof(board.clone(), salt, 0);
+    let proof = generate_proof(board.span(), salt, 0);
 
     let value: u8 = 0; // Water (fake)
     let salted_value = pedersen(value.into(), salt);
@@ -601,7 +600,7 @@ fn test_correct_value_incorrect_salt_does_not_verify() {
     let board = create_board(ships.span(), 6);
 
     let root = compute_merkle_root(board.clone(), salt);
-    let proof = generate_proof(board.clone(), salt, 0);
+    let proof = generate_proof(board.span(), salt, 0);
 
     let value: u8 = *board.get(0).unwrap().unbox();
     let salted_value = pedersen(value.into(), 5678);

@@ -1,5 +1,8 @@
-use crate::types::contract::starkwaves::Event;
+use crate::types::contract::starkwaves::{
+    Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind
+};
 use crate::types::error::GameError;
+use crate::types::{Orientation, Ship, ShipKind};
 use starknet_rust::core::types::TransactionReceipt;
 use starknet_rust::core::types::{Event as StarknetEvent, Felt};
 use starknet_rust::macros::selector;
@@ -13,12 +16,10 @@ impl IntoEvents for TransactionReceipt {
         let events: Vec<StarknetEvent> = if let TransactionReceipt::Invoke(invoke) = self {
             invoke.events
         } else {
-            return Err(GameError::InvalidState(
-                format!(
-                    "Expected TransactionReceipt but instead received {:?}",
-                    self
-                )
-            ));
+            return Err(GameError::InvalidState(format!(
+                "Expected TransactionReceipt but instead received {:?}",
+                self
+            )));
         };
 
         Ok(events
@@ -28,12 +29,41 @@ impl IntoEvents for TransactionReceipt {
     }
 }
 
+impl Into<ContractShip> for Ship {
+    fn into(self) -> ContractShip {
+        ContractShip {
+            kind: self.kind.into(),
+            x: self.x,
+            y: self.y,
+            orientation: self.orientation.into(),
+        }
+    }
+}
+
+impl Into<ContractOrientation> for Orientation {
+    fn into(self) -> ContractOrientation {
+        match self {
+            Orientation::Horizontal => ContractOrientation::Horizontal,
+            Orientation::Vertical => ContractOrientation::Vertical,
+        }
+    }
+}
+
+impl Into<ContractShipKind> for ShipKind {
+    fn into(self) -> ContractShipKind {
+        match self {
+            ShipKind::Carrier => ContractShipKind::Carrier,
+            ShipKind::Battleship => ContractShipKind::Battleship,
+            ShipKind::Cruiser => ContractShipKind::Cruiser,
+            ShipKind::Submarine => ContractShipKind::Submarine,
+            ShipKind::Destroyer => ContractShipKind::Destroyer,
+            ShipKind::SuperCarrier => ContractShipKind::SuperCarrier,
+        }
+    }
+}
+
 pub fn in_lobby_event_keys() -> Vec<Vec<Felt>> {
-    vec![
-        vec![
-            selector!("PlayersAssembled")
-        ]
-    ]
+    vec![vec![selector!("PlayersAssembled")]]
 }
 
 pub fn in_game_event_keys(game_id: Felt) -> Vec<Vec<Felt>> {

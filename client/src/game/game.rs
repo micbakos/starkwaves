@@ -1,6 +1,6 @@
 use crate::types::board_size::BoardSize;
 use crate::types::contract::mappings::{IntoEvents, in_game_event_keys, in_lobby_event_keys};
-use crate::types::contract::starkwaves::Event;
+use crate::types::contract::starkwaves::{Event, Ship as ContractShip};
 use crate::types::contract::starkwaves::{Outcome, Starkwaves};
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
@@ -314,7 +314,8 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.reveal(&game_id, &board.to_array()?, &salt.into())
+        let ships = board.ships().into_iter().map(|s| s.into()).collect::<Vec<ContractShip>>();
+        let execution = contract.reveal(&game_id, &ships, &salt.into())
             .gas_estimate_multiplier(5.0);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
         let receipt_info = wait_success(self.player.provider(), result.transaction_hash)

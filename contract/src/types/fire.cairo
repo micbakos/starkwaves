@@ -1,10 +1,21 @@
+use core::fmt::Display;
 use starknet::ContractAddress;
 use super::ship::ShipKind;
 
 #[derive(Debug, Drop, Serde, Copy)]
 pub enum FireStatus {
-    Miss: felt252,
+    Miss: felt252, // Felt is for pedersen(ship_kind.id, salt) 
     Hit: (ShipKind, felt252),
+}
+
+impl DisplayImpl of Display<FireStatus> {
+    fn fmt(self: @FireStatus, ref f: core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        let display: ByteArray = match self {
+            FireStatus::Miss(_) => "Miss",
+            FireStatus::Hit(_) => "Hit",
+        };
+        write!(f, "{display}")
+    }
 }
 
 #[generate_trait]

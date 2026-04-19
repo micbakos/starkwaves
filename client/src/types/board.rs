@@ -187,6 +187,10 @@ impl Board {
         self.size
     }
 
+    pub fn ships(&self) -> Vec<Ship> {
+        self.ships.clone()
+    }
+
     pub fn is_board_ready(&self) -> bool {
         let mut kinds_placed = HashMap::<ShipKind, u8>::new();
 
