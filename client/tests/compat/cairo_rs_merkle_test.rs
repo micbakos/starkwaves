@@ -78,13 +78,13 @@ mod tests {
                         } else {
                             Err(CairoError::from_values(
                                 vec![value],
-                                "Expected bool enum as return type of verify_report",
+                                "Expected bool enum as return type of verify",
                             ))
                         }
                     } else {
                         Err(CairoError::from_values(
                             vec![value],
-                            "Expected bool enum as return type of verify_report",
+                            "Expected bool enum as return type of verify",
                         ))
                     }
                 })

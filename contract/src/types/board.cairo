@@ -1,10 +1,17 @@
+use core::dict::Felt252Dict;
 use core::fmt::Display;
-use crate::Felt252Dict;
+use core::nullable::{FromNullableResult, match_nullable};
+use crate::utils::cartesian_to_offset;
 use super::ShipKind;
-use super::ship::{Orientation, Ship, ShipKindTrait};
+use super::ship::{HullSection, Orientation, Ship, ShipKindTrait};
 
 pub trait BoardSizeTrait<B> {
     fn size(self: @B) -> u8;
+
+    fn leaves(self: @B) -> u32 {
+        let size: u32 = Self::size(self).into();
+        size * size
+    }
 
     fn total_hits(self: @B) -> u8;
 }
@@ -142,13 +149,46 @@ pub impl LargerBoardSizeImpl of BoardSizeTrait<LargerBoardSize> {
     }
 }
 
-pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<bool> {
-    let mut board: Felt252Dict<u8> = Default::default();
+pub fn ships_to_hulls(
+    ships: Span<Ship>, board_size: @BoardSize,
+) -> Felt252Dict<Nullable<HullSection>> {
+    let mut sections: Felt252Dict<Nullable<HullSection>> = Default::default();
 
-    let offset = |x: u8, y: u8| -> felt252 {
-        let rows_offset: u32 = x.into() * board_size.into();
-        (rows_offset + y.into()).into()
-    };
+    let mut index = 0;
+    for ship in ships {
+        let kind = ship.kind;
+        let id = index;
+        let size = kind.length();
+
+        for step in 0..size {
+            let (x, y) = match ship.orientation {
+                Orientation::Horizontal => (*ship.x, *ship.y + step),
+                Orientation::Vertical => (*ship.x + step, *ship.y),
+            };
+
+            let offset: felt252 = cartesian_to_offset(board_size, x, y).into();
+            match match_nullable(sections.get(offset)) {
+                FromNullableResult::Null => {
+                    sections
+                        .insert(
+                            offset,
+                            NullableTrait::new(HullSection { ship_id: id, ship_kind: *ship.kind }),
+                        );
+                },
+                FromNullableResult::NotNull(section) => {
+                    panic!("Ship {} collides with {} in [{},{}]", kind, section.ship_kind, x, y)
+                },
+            }
+        }
+
+        index += 1;
+    }
+
+    sections
+}
+
+pub fn ships_to_dict(ships: Span<Ship>, board_size: @BoardSize) -> Felt252Dict<u8> {
+    let mut board: Felt252Dict<u8> = Default::default();
 
     for ship in ships {
         let id = ship.kind.id();
@@ -160,7 +200,7 @@ pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<bool> {
                 Orientation::Vertical => (*ship.x + step, *ship.y),
             };
 
-            let offset = offset(x, y);
+            let offset: felt252 = cartesian_to_offset(board_size, x, y).into();
             let item = board.get(offset);
 
             assert!(item == 0, "Ship {} collides with {} in [{},{}]", id, item, x, y)
@@ -169,12 +209,33 @@ pub fn create_board(ships: Span<Ship>, board_size: u8) -> Array<bool> {
         }
     }
 
-    let mut board_array: Array<bool> = ArrayTrait::new();
-    let array_size: u32 = board_size.into() * board_size.into();
+    board
+}
+
+pub fn hulls_to_merkle_leaves(
+    ref sections: Felt252Dict<Nullable<HullSection>>, board_size: @BoardSize,
+) -> Array<bool> {
+    let mut leaves: Array<bool> = ArrayTrait::new();
+    let size: u32 = board_size.size().into();
+    let array_size: u32 = size * size;
     for i in 0..array_size {
-        let ship_id = board.get(i.into());
-        board_array.append(ship_id != 0);
+        let ship_id = sections.get(i.into());
+        leaves.append(!ship_id.is_null());
     }
 
-    return board_array;
+    return leaves;
+}
+
+pub fn create_board_merkle_leaves(ships: Span<Ship>, board_size: @BoardSize) -> Array<bool> {
+    let mut board = ships_to_dict(ships, board_size);
+
+    let mut leaves: Array<bool> = ArrayTrait::new();
+    let size: u32 = board_size.size().into();
+    let array_size: u32 = size * size;
+    for i in 0..array_size {
+        let ship_id = board.get(i.into());
+        leaves.append(ship_id != 0);
+    }
+
+    return leaves;
 }

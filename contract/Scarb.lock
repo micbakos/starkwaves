@@ -3,8 +3,8 @@ version = 1
 
 [[package]]
 name = "alexandria_data_structures"
-version = "0.8.0"
-source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.8.0#cb290c4d3884aca23d450950e7f302ceebc98d16"
+version = "0.10.0"
+source = "git+https://github.com/keep-starknet-strange/alexandria.git?tag=v0.10.0#a5d6808b9fe133288982db9ba5abb438050bc3c3"
 
 [[package]]
 name = "merkle"
@@ -37,15 +37,15 @@ dependencies = [
 
 [[package]]
 name = "snforge_scarb_plugin"
-version = "0.51.2"
+version = "0.59.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:7b94edb0a94b93915200275076c29ef8266f4b870ffda04360cf36bc3b5e67cc"
+checksum = "sha256:871fba677c03b66a1bf40815dac0ab1b385eb1b9be6e6c3cf2ad9788eeb2b6bb"
 
 [[package]]
 name = "snforge_std"
-version = "0.51.2"
+version = "0.59.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:d7287b7e9c826ee560788a7a9b808a2a0454977ac4111bd3c1bcb3c7c5f01040"
+checksum = "sha256:3620924fa08bd2d740b2b5b01ef86c8dab3d4b9c2206387c8dbdc8d2ec15133e"
 dependencies = [
  "snforge_scarb_plugin",
 ]

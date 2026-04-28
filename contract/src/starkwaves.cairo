@@ -1,5 +1,4 @@
-use crate::Ship;
-use crate::types::{BoardSize, FireStatus};
+use crate::types::{BoardSize, FireStatus, Ship};
 
 #[starknet::interface]
 pub trait IStarkwaves<TContractState> {

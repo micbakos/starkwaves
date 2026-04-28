@@ -94,3 +94,9 @@ pub impl ShipKindImpl of ShipKindTrait {
         ]
     }
 }
+
+#[derive(Debug, Drop, Serde, Copy)]
+pub struct HullSection {
+    pub ship_id: felt252,
+    pub ship_kind: ShipKind,
+}

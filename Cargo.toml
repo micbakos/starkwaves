@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["client"]
+
+[patch.crates-io]
+starknet-rust-core = { path = "patches/starknet-rust-core" }
+cainome-cairo-serde = { path = "patches/cainome-cairo-serde" }

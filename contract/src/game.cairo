@@ -1,9 +1,14 @@
+use core::pedersen::pedersen;
 use starknet::ContractAddress;
+use crate::types::board::{hulls_to_merkle_leaves, ships_to_hulls};
 use crate::types::{
     BoardSize, BoardSizeTrait, FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal,
-    OutcomeBeforeRevealTrait, RevealStatus,
+    OutcomeBeforeRevealTrait, RevealStatus, Ship, ShipKindTrait,
 };
-use crate::{Ship, create_board};
+use crate::utils::{
+    append_bomb_at, contains_bomb_at, get_bomb_offset_at_turn, offset_to_cartesian,
+    verify_destructions,
+};
 
 #[derive(Debug, Drop, starknet::Store, Clone)]
 pub struct Game {
@@ -11,10 +16,12 @@ pub struct Game {
     pub board_size: BoardSize,
     pub player_a: ContractAddress,
     pub player_b: ContractAddress,
-    pub player_a_bombs: ByteArray,
-    pub player_b_bombs: ByteArray,
-    pub player_a_hits: u8,
-    pub player_b_hits: u8,
+    pub player_a_bombs_on_b: ByteArray,
+    pub player_b_bombs_on_a: ByteArray,
+    pub player_a_hits_on_b: u8,
+    pub player_b_hits_on_a: u8,
+    pub player_a_destruction_hash: felt252,
+    pub player_b_destruction_hash: felt252,
     pub player_a_root: Option<felt252>,
     pub player_b_root: Option<felt252>,
     pub attacking_player: Option<ContractAddress>,
@@ -32,10 +39,12 @@ impl GameDefault of Default<Game> {
             board_size: Default::default(),
             player_a: zero_address,
             player_b: zero_address,
-            player_a_bombs: Default::default(),
-            player_b_bombs: Default::default(),
-            player_a_hits: 0,
-            player_b_hits: 0,
+            player_a_bombs_on_b: Default::default(),
+            player_b_bombs_on_a: Default::default(),
+            player_a_hits_on_b: 0,
+            player_b_hits_on_a: 0,
+            player_a_destruction_hash: 0,
+            player_b_destruction_hash: 0,
             player_a_root: None,
             player_b_root: None,
             attacking_player: None,
@@ -61,12 +70,14 @@ pub impl GameImpl of GameTrait {
             board_size,
             player_a,
             player_b,
-            player_a_bombs: Default::default(),
-            player_b_bombs: Default::default(),
-            player_a_hits: 0,
-            player_b_hits: 0,
+            player_a_bombs_on_b: Default::default(),
+            player_b_bombs_on_a: Default::default(),
+            player_a_hits_on_b: 0,
+            player_b_hits_on_a: 0,
             player_a_root: None,
             player_b_root: None,
+            player_a_destruction_hash: 0,
+            player_b_destruction_hash: 0,
             attacking_player: None,
             turn_index: 0,
             outcome_before_reveal: None,
@@ -106,8 +117,9 @@ pub impl GameImpl of GameTrait {
         if let Some(attacking_player) = self.attacking_player {
             assert!(attacking_player == player, "It is not player's {:?} turn yet.", player);
 
+            let turn = self.turn_index;
             assert!(
-                self.bomb_offset_in_current_turn(@player).is_none(),
+                self.bomb_offset_at_turn(@player, turn).is_none(),
                 "Player {:?} cannot attack again in this turn.",
                 player,
             );
@@ -132,8 +144,9 @@ pub impl GameImpl of GameTrait {
         );
         assert!(player != attacking_player, "Attacker cannot defend in this round.");
 
+        let turn = self.turn_index;
         let offset = self
-            .bomb_offset_in_current_turn(@attacking_player)
+            .bomb_offset_at_turn(@attacking_player, turn)
             .expect('Bomb should have been placed.');
         let defending_root = if attacking_player == self.player_a {
             self.player_b_root
@@ -148,7 +161,7 @@ pub impl GameImpl of GameTrait {
             return None;
         }
 
-        let (x, y) = self.offset_to_cartesian(offset);
+        let (x, y) = offset_to_cartesian(@self.board_size, offset);
         let mut hit_result = HitReport {
             attacker: attacking_player, defender: player, x, y, hit: false, destroyed: None,
         };
@@ -157,6 +170,18 @@ pub impl GameImpl of GameTrait {
 
             hit_result.hit = true;
             hit_result.destroyed = maybe_destroyed_kind;
+
+            if let Some(destroyed_kind) = maybe_destroyed_kind {
+                if player == self.player_a {
+                    self
+                        .player_a_destruction_hash =
+                            pedersen(self.player_a_destruction_hash, destroyed_kind.id().into())
+                } else {
+                    self
+                        .player_b_destruction_hash =
+                            pedersen(self.player_b_destruction_hash, destroyed_kind.id().into())
+                }
+            }
 
             let won = self.check_won(@attacking_player);
             if won {
@@ -180,11 +205,13 @@ pub impl GameImpl of GameTrait {
     ) -> Option<Outcome> {
         assert!(self.outcome_before_reveal.is_some(), "The game is not finished yet.");
 
-        let size = self.board_size.size();
-        let board = create_board(ships.span(), size);
-        let board_length: u32 = (size * size).into();
+        let size = self.board_size;
+        let ships_span = ships.span();
+        let mut hulls = ships_to_hulls(ships_span, @size);
+
+        let board_leaves = hulls_to_merkle_leaves(ref hulls, @size);
         assert!(
-            board.len() == board_length, "The board revealed should be of size {}x{}", size, size,
+            board_leaves.len() == size.leaves(), "The board revealed should be of size {}", size,
         );
 
         if player == self.player_a {
@@ -201,22 +228,32 @@ pub impl GameImpl of GameTrait {
             );
         }
 
-        let revealed_root = merkle::compute_merkle_root(board, salt);
+        let revealed_root = merkle::compute_merkle_root(board_leaves, salt);
 
         if player == self.player_a {
             let committed = self.player_a_root.expect('Root should have been committed');
-            if committed == revealed_root {
-                self.player_a_reveal_status = Some(RevealStatus::Real);
+            let status = if committed == revealed_root
+                && verify_destructions(
+                    ref hulls, @size, self.player_a_destruction_hash, @self.player_b_bombs_on_a,
+                ) {
+                Some(RevealStatus::Real)
             } else {
-                self.player_a_reveal_status = Some(RevealStatus::Fake);
-            }
+                Some(RevealStatus::Fake)
+            };
+
+            self.player_a_reveal_status = status;
         } else {
             let committed = self.player_b_root.expect('Root should have been committed');
-            if committed == revealed_root {
-                self.player_b_reveal_status = Some(RevealStatus::Real);
+            let status = if committed == revealed_root
+                && verify_destructions(
+                    ref hulls, @size, self.player_b_destruction_hash, @self.player_a_bombs_on_b,
+                ) {
+                Some(RevealStatus::Real)
             } else {
-                self.player_b_reveal_status = Some(RevealStatus::Fake);
-            }
+                Some(RevealStatus::Fake)
+            };
+
+            self.player_b_reveal_status = status;
         }
 
         if self.player_a_reveal_status.is_none() || self.player_b_reveal_status.is_none() {
@@ -247,13 +284,12 @@ impl InternalGameImpl of InternalGameTrait {
     fn check_won(self: @Game, attacker: @ContractAddress) -> bool {
         let total_potential_hits = self.board_size.total_hits();
         if attacker == self.player_a {
-            total_potential_hits == *self.player_a_hits
+            total_potential_hits == *self.player_a_hits_on_b
         } else {
-            total_potential_hits == *self.player_b_hits
+            total_potential_hits == *self.player_b_hits_on_a
         }
     }
 
-    /// Computes the final outcome after both players have revealed their boards.
     fn compute_final_outcome(self: @Game) -> Outcome {
         let outcome_before = (*self.outcome_before_reveal).expect('Outcome before reveal missing');
         let status_a = (*self.player_a_reveal_status).expect('Player A reveal status missing');
@@ -292,103 +328,40 @@ impl InternalGameImpl of InternalGameTrait {
 
     fn increment_success_hits(ref self: Game, attacker: ContractAddress) {
         if attacker == self.player_a {
-            self.player_a_hits += 1;
+            self.player_a_hits_on_b += 1;
         } else {
-            self.player_b_hits += 1;
+            self.player_b_hits_on_a += 1;
         }
     }
 }
 
 #[generate_trait]
 pub impl GameBombsImpl of GameBombsTrait {
-    fn offset_bytes(self: @Game, x: u8, y: u8) -> (u8, u8) {
-        let board_size = *self.board_size;
-
-        let rows_offset: u32 = x.into() * board_size.size().into();
-        let offset = rows_offset + y.into();
-
-        let high_byte: u8 = (offset / 256).try_into().unwrap();
-        let low_byte: u8 = (offset % 256).try_into().unwrap();
-
-        (high_byte, low_byte)
-    }
-
     fn append_bomb(ref self: Game, attacker: ContractAddress, x: u8, y: u8) {
-        let (high, low) = self.offset_bytes(x, y);
-
         if attacker == self.player_a {
-            self.player_a_bombs.append_byte(high);
-            self.player_a_bombs.append_byte(low);
+            append_bomb_at(ref self.player_a_bombs_on_b, @self.board_size, x, y);
         } else if attacker == self.player_b {
-            self.player_b_bombs.append_byte(high);
-            self.player_b_bombs.append_byte(low);
+            append_bomb_at(ref self.player_b_bombs_on_a, @self.board_size, x, y);
         }
     }
 
-    fn bomb_offset_in_current_turn(self: @Game, attacker: @ContractAddress) -> Option<u32> {
-        let turn = *self.turn_index;
-
+    fn bomb_offset_at_turn(self: @Game, attacker: @ContractAddress, turn: u32) -> Option<u32> {
         if attacker == self.player_a {
-            Some(self.player_a_bombs)
+            get_bomb_offset_at_turn(self.player_a_bombs_on_b, self.board_size, turn)
         } else if attacker == self.player_b {
-            Some(self.player_b_bombs)
+            get_bomb_offset_at_turn(self.player_b_bombs_on_a, self.board_size, turn)
         } else {
             None
         }
-            .and_then(
-                |b| {
-                    let mut offset: u32 = 0;
-                    if let Some(high) = b.at(turn * 2) {
-                        offset = high.into() * 256;
-                    } else {
-                        return None;
-                    }
-
-                    if let Some(low) = b.at((turn * 2) + 1) {
-                        offset += low.into();
-                    } else {
-                        return None;
-                    }
-
-                    Some(offset)
-                },
-            )
-    }
-
-    fn offset_to_cartesian(self: @Game, offset: u32) -> (u8, u8) {
-        let board_size: u32 = self.board_size.size().into();
-        let x: u8 = (offset / board_size).try_into().unwrap();
-        let y: u8 = (offset % board_size).try_into().unwrap();
-        (x, y)
     }
 
     fn is_bombed(self: @Game, attacker: @ContractAddress, x: u8, y: u8) -> bool {
-        let (high, low) = self.offset_bytes(x, y);
-
         if attacker == self.player_a {
-            self.player_a_bombs.contains_bomb(high, low)
+            contains_bomb_at(self.player_a_bombs_on_b, self.board_size, x, y)
         } else if attacker == self.player_b {
-            self.player_b_bombs.contains_bomb(high, low)
+            contains_bomb_at(self.player_b_bombs_on_a, self.board_size, x, y)
         } else {
             false
         }
-    }
-
-    fn contains_bomb(self: @ByteArray, high: u8, low: u8) -> bool {
-        let len = self.len();
-        let mut i = 0;
-
-        while i < len {
-            if i + 1 < len {
-                let _high = self.at(i).unwrap();
-                let _low = self.at(i + 1).unwrap();
-                if high == _high && low == _low {
-                    return true;
-                }
-            }
-            i = i + 2;
-        }
-
-        false
     }
 }
