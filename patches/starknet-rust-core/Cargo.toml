@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "starknet-rust-core"
-version = "0.19.0-rc.2"
+version = "0.19.0"
 authors = [
     "Software Mansion <contact@swmansion.com>",
     "Jonathan LEI <me@xjonathan.dev>",
@@ -69,7 +69,7 @@ features = ["alloc"]
 default-features = false
 
 [dependencies.crypto-bigint]
-version = "0.6.1"
+version = "0.7"
 default-features = false
 
 [dependencies.flate2]
@@ -132,10 +132,10 @@ version = "0.10.8"
 default-features = false
 
 [dependencies.starknet-rust-core-derive]
-version = "0.19.0-rc.2"
+version = "0.19.0"
 
 [dependencies.starknet-rust-crypto]
-version = "0.19.0-rc.2"
+version = "0.19.0"
 features = ["alloc"]
 default-features = false
 

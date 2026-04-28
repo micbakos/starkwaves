@@ -105,7 +105,8 @@ where
 
         let contract = Starkwaves::new(contract_address, &player);
 
-        let execution = contract.request_start_game(&board_size.into());
+        let execution = contract.request_start_game(&board_size.into())
+            .gas_estimate_multiplier(5.0);
         let result = execution.send().await.map_err(|e| {
             e.into()
         })?;
@@ -242,7 +243,8 @@ where
 
         if let Some((root, game_id)) = commit_info {
             let contract = self.contract();
-            let execution = contract.commit_board(&root, &game_id);
+            let execution = contract.commit_board(&root, &game_id)
+                .gas_estimate_multiplier(5.0);
             let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
             wait_success(self.player.provider(), result.transaction_hash)
                 .await
@@ -264,7 +266,8 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.attack(&game_id, &x, &y);
+        let execution = contract.attack(&game_id, &x, &y)
+            .gas_estimate_multiplier(5.0);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
         wait_success(self.player.provider(), result.transaction_hash)
             .await
@@ -295,7 +298,8 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.defend(&game_id, &report.contract_fire_status(salt), &report.proof);
+        let execution = contract.defend(&game_id, &report.contract_fire_status(salt), &report.proof)
+            .gas_estimate_multiplier(5.0);
         let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
         wait_success(self.player.provider(), result.transaction_hash)
             .await
