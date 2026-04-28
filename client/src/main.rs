@@ -129,6 +129,7 @@ async fn main() {
                     println!("Commands:");
                     println!("\t- place <type> <x> <y> <h|v>");
                     println!("\t- attack <x> <y>");
+                    println!("\t- turn");
                     println!("\t- boards");
                     println!("\t- quit");
                 }
