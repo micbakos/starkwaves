@@ -218,3 +218,7 @@ This design ensures that players cannot lie about hits, misses, or ship destruct
 - [ ] **No game resumption after disconnect.** If a player quits, the contract is not notified and there is currently no way to resume the game from the client. This is fairly easily fixable: if the player remembers the salt and reconstructs the board, the Merkle root can be recomputed, verified against the on-chain commitment, and the game can resume since all state is stored on-chain.
 - [ ] **Ships are linear only.** All ships occupy a straight line of cells, either horizontal or vertical. Non-linear shapes (e.g. L-shaped ships) are not currently supported but could be added without affecting the core commit-reveal and verification logic.
 - [ ] **No indexer, no rankings.** The game relies solely on a direct RPC connection to a Starknet node. There is no indexer involved, so there are no rankings, lobby tables, or historical game data available beyond what can be read from on-chain state and events.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
