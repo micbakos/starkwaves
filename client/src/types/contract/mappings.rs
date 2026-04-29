@@ -76,7 +76,12 @@ impl Into<ShipKind> for ContractShipKind {
 }
 
 pub fn in_lobby_event_keys() -> Vec<Vec<Felt>> {
-    vec![vec![selector!("PlayersAssembled")]]
+    vec![
+        vec![
+            selector!("PlayersAssembled"),
+            selector!("Reset"),
+        ],
+    ]
 }
 
 pub fn in_game_event_keys(game_id: Felt) -> Vec<Vec<Felt>> {
@@ -87,7 +92,8 @@ pub fn in_game_event_keys(game_id: Felt) -> Vec<Vec<Felt>> {
             selector!("AttackResult"),
             selector!("GameRevealRequest"),
             selector!("GameOver"),
+            selector!("Reset"),
         ],
-        vec![game_id],
+        vec![game_id, Felt::ZERO], // Felt::ZERO is for Reset
     ]
 }

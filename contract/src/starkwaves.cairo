@@ -28,10 +28,10 @@ pub mod Starkwaves {
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
     use crate::events::{
         AttackEvent, AttackResultEvent, GameOverEvent, GameRevealRequestEvent, GameStartedEvent,
-        PlayerEnteredLobbyEvent, PlayersAssembledEvent,
+        PlayerEnteredLobbyEvent, PlayersAssembledEvent, ResetEvent,
     };
     use crate::game::{Game, GameTrait};
     use crate::types::{AllBoardSizesTrait, BoardSizeTrait};
@@ -63,6 +63,7 @@ pub mod Starkwaves {
         AttackResult: AttackResultEvent,
         GameRevealRequest: GameRevealRequestEvent,
         GameOver: GameOverEvent,
+        Reset: ResetEvent,
         // Events from other components
         #[flat]
         OwnableEvent: OwnableComponent::Event,
@@ -220,6 +221,8 @@ pub mod Starkwaves {
             }
 
             self.next_game_id.write(1);
+
+            self.emit(ResetEvent { game_id: 0, timestamp: get_block_timestamp() })
         }
 
         fn get_next_game_id(self: @ContractState) -> felt252 {

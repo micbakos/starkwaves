@@ -199,6 +199,11 @@ impl GameCallback for PrintCallback {
                         }
                     }
                 }
+                exit(0);
+            }
+            GameUpdate::Reset => {
+                println!("Starkwaves has to stop. Game owner reset the state of the contract.");
+                exit(0);
             }
         }
     }

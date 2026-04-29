@@ -63,6 +63,7 @@ pub enum GameUpdate {
     GameOver {
         outcome: GameOverOutcome,
     },
+    Reset
 }
 
 #[async_trait]
@@ -211,6 +212,7 @@ where
 
                 Ok(game)
             }
+            Event::Reset(_) => Err(GameError::ContractReset),
             _ => {
                 Err(GameError::InvalidState(
                     format!(
@@ -405,15 +407,20 @@ where
                         .try_into()
                         .expect("EmittedEvent should be converted to GameEvent");
 
-                    if let Event::PlayersAssembled(event) = game_event.clone() {
-                        if board_size != event.board_size.into() {
-                            continue;
-                        }
+                    match game_event.clone() {
+                        Event::PlayersAssembled(event) => {
+                            if board_size != event.board_size.into() {
+                                continue;
+                            }
 
-                        if sender.send((game_event, block_number)).await.is_err() {
+                            let _ = sender.send((game_event, block_number)).await;
                             break;
                         }
-                        break;
+                        Event::Reset(_) => {
+                            let _ = sender.send((game_event, block_number)).await;
+                            break;
+                        }
+                        _ => {}
                     }
                 }
                 EventsUpdate::Reorg(_) => {
@@ -658,6 +665,19 @@ where
                     .on_update(GameUpdate::GameOver {
                         outcome: GameOverOutcome::from(event.outcome, self.player_address()),
                     })
+                    .await;
+            }
+            Event::Reset(_) => {
+                if let GameState::InGame(ref mut in_game) = self.state {
+                    if matches!(in_game.state, InGameState::Ended) {
+                        return Ok(());
+                    }
+                    in_game.state = InGameState::Ended;
+                }
+
+                let callback = self.callback.clone();
+                callback
+                    .on_update(GameUpdate::Reset)
                     .await;
             }
             _ => {}

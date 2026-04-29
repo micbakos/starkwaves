@@ -62,6 +62,8 @@ fn main() {
         .with_derives(vec![
             "Debug".into(),
             "Clone".into(),
+            "serde::Serialize".into(),
+            "serde::Deserialize".into(),
         ])
         .with_types_aliases(HashMap::from([
             ("openzeppelin_access::ownable::ownable::OwnableComponent::Event".to_string(), "OwnableComponentEvent".to_string())

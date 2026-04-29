@@ -75,7 +75,10 @@ pub enum GameError {
     InvalidInput {
         expected: String,
         received: String
-    }
+    },
+
+    #[error("Contract state was reset.")]
+    ContractReset,
 }
 
 impl Into<GameError> for ProviderError {

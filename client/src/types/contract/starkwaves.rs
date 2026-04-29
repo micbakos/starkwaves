@@ -56,7 +56,7 @@ impl<P: starknet_rust::providers::Provider + Sync> StarkwavesReader<P> {
         Self { block_id, ..self }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttackEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub player: cainome::cairo_serde::ContractAddress,
@@ -122,7 +122,7 @@ impl AttackEvent {
         "AttackEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttackResultEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub attacker: cainome::cairo_serde::ContractAddress,
@@ -218,7 +218,7 @@ impl AttackResultEvent {
         "AttackResultEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameOverEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
@@ -294,7 +294,7 @@ impl GameOverEvent {
         "GameOverEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameRevealRequestEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
@@ -364,7 +364,7 @@ impl GameRevealRequestEvent {
         "GameRevealRequestEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GameStartedEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub attacker: cainome::cairo_serde::ContractAddress,
@@ -434,7 +434,7 @@ impl GameStartedEvent {
         "GameStartedEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OwnershipTransferStarted {
     pub previous_owner: cainome::cairo_serde::ContractAddress,
     pub new_owner: cainome::cairo_serde::ContractAddress,
@@ -503,7 +503,7 @@ impl OwnershipTransferStarted {
         "OwnershipTransferStarted"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OwnershipTransferred {
     pub previous_owner: cainome::cairo_serde::ContractAddress,
     pub new_owner: cainome::cairo_serde::ContractAddress,
@@ -571,7 +571,7 @@ impl OwnershipTransferred {
         "OwnershipTransferred"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayerEnteredLobbyEvent {
     pub lobby: BoardSize,
     pub player: cainome::cairo_serde::ContractAddress,
@@ -625,7 +625,7 @@ impl PlayerEnteredLobbyEvent {
         "PlayerEnteredLobbyEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayersAssembledEvent {
     pub game_id: starknet_rust::core::types::Felt,
     pub player_a: cainome::cairo_serde::ContractAddress,
@@ -701,7 +701,52 @@ impl PlayersAssembledEvent {
         "PlayersAssembledEvent"
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ResetEvent {
+    pub game_id: starknet_rust::core::types::Felt,
+    #[serde(
+        serialize_with = "cainome::cairo_serde::serialize_as_hex",
+        deserialize_with = "cainome::cairo_serde::deserialize_from_hex"
+    )]
+    pub timestamp: u64,
+}
+impl cainome::cairo_serde::CairoSerde for ResetEvent {
+    type RustType = Self;
+    const SERIALIZED_SIZE: std::option::Option<usize> = None;
+    #[inline]
+    fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
+        let mut __size = 0;
+        __size += starknet_rust::core::types::Felt::cairo_serialized_size(&__rust.game_id);
+        __size += u64::cairo_serialized_size(&__rust.timestamp);
+        __size
+    }
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(starknet_rust::core::types::Felt::cairo_serialize(&__rust.game_id));
+        __out.extend(u64::cairo_serialize(&__rust.timestamp));
+        __out
+    }
+    fn cairo_deserialize(
+        __felts: &[starknet_rust::core::types::Felt],
+        __offset: usize,
+    ) -> cainome::cairo_serde::Result<Self::RustType> {
+        let mut __offset = __offset;
+        let game_id = starknet_rust::core::types::Felt::cairo_deserialize(__felts, __offset)?;
+        __offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
+        let timestamp = u64::cairo_deserialize(__felts, __offset)?;
+        __offset += u64::cairo_serialized_size(&timestamp);
+        Ok(ResetEvent { game_id, timestamp })
+    }
+}
+impl ResetEvent {
+    pub fn event_selector() -> starknet_rust::core::types::Felt {
+        starknet_rust::core::utils::get_selector_from_name("ResetEvent").unwrap()
+    }
+    pub fn event_name() -> &'static str {
+        "ResetEvent"
+    }
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Ship {
     pub kind: ShipKind,
     pub x: u8,
@@ -744,7 +789,7 @@ impl cainome::cairo_serde::CairoSerde for Ship {
         Ok(Ship { kind, x, y, orientation })
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum BoardSize {
     Standard,
     Smaller(SmallerBoardSize),
@@ -812,7 +857,7 @@ impl cainome::cairo_serde::CairoSerde for BoardSize {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Event {
     PlayerEntererLobby(PlayerEnteredLobbyEvent),
     PlayersAssembled(PlayersAssembledEvent),
@@ -821,6 +866,7 @@ pub enum Event {
     AttackResult(AttackResultEvent),
     GameRevealRequest(GameRevealRequestEvent),
     GameOver(GameOverEvent),
+    Reset(ResetEvent),
     OwnableEvent(OwnableComponentEvent),
 }
 impl cainome::cairo_serde::CairoSerde for Event {
@@ -842,6 +888,7 @@ impl cainome::cairo_serde::CairoSerde for Event {
                 GameRevealRequestEvent::cairo_serialized_size(val) + 1
             }
             Event::GameOver(val) => GameOverEvent::cairo_serialized_size(val) + 1,
+            Event::Reset(val) => ResetEvent::cairo_serialized_size(val) + 1,
             Event::OwnableEvent(val) => {
                 OwnableComponentEvent::cairo_serialized_size(val) + 1
             }
@@ -892,9 +939,15 @@ impl cainome::cairo_serde::CairoSerde for Event {
                 temp.extend(GameOverEvent::cairo_serialize(val));
                 temp
             }
-            Event::OwnableEvent(val) => {
+            Event::Reset(val) => {
                 let mut temp = vec![];
                 temp.extend(usize::cairo_serialize(&7usize));
+                temp.extend(ResetEvent::cairo_serialize(val));
+                temp
+            }
+            Event::OwnableEvent(val) => {
+                let mut temp = vec![];
+                temp.extend(usize::cairo_serialize(&8usize));
                 temp.extend(OwnableComponentEvent::cairo_serialize(val));
                 temp
             }
@@ -957,6 +1010,9 @@ impl cainome::cairo_serde::CairoSerde for Event {
                 )
             }
             7usize => {
+                Ok(Event::Reset(ResetEvent::cairo_deserialize(__felts, __offset + 1)?))
+            }
+            8usize => {
                 Ok(
                     Event::OwnableEvent(
                         OwnableComponentEvent::cairo_deserialize(__felts, __offset + 1)?,
@@ -1568,6 +1624,46 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     outcome,
                 }),
             );
+        }
+        let selector = event.keys[0];
+        if selector
+            == starknet_rust::core::utils::get_selector_from_name("Reset")
+                .unwrap_or_else(|_| panic!("Invalid selector for {}", "Reset"))
+        {
+            let mut key_offset = 0 + 1;
+            let mut data_offset = 0;
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
+                &event.keys,
+                key_offset,
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Reset",
+                            e,
+                        ),
+                    );
+                }
+            };
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
+            let timestamp = match u64::cairo_deserialize(&event.data, data_offset) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "timestamp",
+                            "Reset",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += u64::cairo_serialized_size(&timestamp);
+            return Ok(Event::Reset(ResetEvent { game_id, timestamp }));
         }
         let selector = event.keys[0];
         if selector
@@ -2284,6 +2380,46 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
         }
         let selector = event.keys[0];
         if selector
+            == starknet_rust::core::utils::get_selector_from_name("Reset")
+                .unwrap_or_else(|_| panic!("Invalid selector for {}", "Reset"))
+        {
+            let mut key_offset = 0 + 1;
+            let mut data_offset = 0;
+            let game_id = match starknet_rust::core::types::Felt::cairo_deserialize(
+                &event.keys,
+                key_offset,
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Reset",
+                            e,
+                        ),
+                    );
+                }
+            };
+            key_offset += starknet_rust::core::types::Felt::cairo_serialized_size(&game_id);
+            let timestamp = match u64::cairo_deserialize(&event.data, data_offset) {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(
+                        format!(
+                            "Could not deserialize field {} for {}: {:?}",
+                            "timestamp",
+                            "Reset",
+                            e,
+                        ),
+                    );
+                }
+            };
+            data_offset += u64::cairo_serialized_size(&timestamp);
+            return Ok(Event::Reset(ResetEvent { game_id, timestamp }));
+        }
+        let selector = event.keys[0];
+        if selector
             == starknet_rust::core::utils::get_selector_from_name("OwnershipTransferred")
                 .unwrap_or_else(|_| {
                     panic!("Invalid selector for {}", "OwnershipTransferred")
@@ -2401,7 +2537,7 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
         Err(format!("Could not match any event from keys {:?}", event.keys))
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum FireStatus {
     Miss(starknet_rust::core::types::Felt),
     Hit((Option<ShipKind>, starknet_rust::core::types::Felt)),
@@ -2483,7 +2619,7 @@ impl cainome::cairo_serde::CairoSerde for FireStatus {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum LargerBoardSize {
     TwelveByTwelve,
     FourteenByFourteen,
@@ -2529,7 +2665,7 @@ impl cainome::cairo_serde::CairoSerde for LargerBoardSize {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Orientation {
     Horizontal,
     Vertical,
@@ -2571,7 +2707,7 @@ impl cainome::cairo_serde::CairoSerde for Orientation {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Outcome {
     Fair(cainome::cairo_serde::ContractAddress),
     FailedToProvideProof(cainome::cairo_serde::ContractAddress),
@@ -2649,7 +2785,7 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum OwnableComponentEvent {
     OwnershipTransferred(OwnershipTransferred),
     OwnershipTransferStarted(OwnershipTransferStarted),
@@ -2966,7 +3102,7 @@ impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
         Err(format!("Could not match any event from keys {:?}", event.keys))
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ShipKind {
     Carrier,
     Battleship,
@@ -3024,7 +3160,7 @@ impl cainome::cairo_serde::CairoSerde for ShipKind {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SmallerBoardSize {
     SixBySix,
     EightByEight,

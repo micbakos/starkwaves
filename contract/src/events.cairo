@@ -63,3 +63,10 @@ pub struct GameOverEvent {
     pub player_b: ContractAddress,
     pub outcome: Outcome,
 }
+
+#[derive(Drop, starknet::Event, Serde)]
+pub struct ResetEvent {
+    #[key]
+    pub game_id: felt252, // always 0
+    pub timestamp: u64,
+}

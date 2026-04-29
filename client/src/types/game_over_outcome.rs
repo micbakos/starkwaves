@@ -4,7 +4,7 @@ use cainome::cairo_serde::ContractAddress;
 #[derive(Debug, Clone)]
 pub enum GameOverOutcome {
     Won(Reason),
-    Lost(Reason),
+    Lost(Reason)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
