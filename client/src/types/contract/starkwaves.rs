@@ -2711,6 +2711,7 @@ impl cainome::cairo_serde::CairoSerde for Orientation {
 pub enum Outcome {
     Fair(cainome::cairo_serde::ContractAddress),
     FailedToProvideProof(cainome::cairo_serde::ContractAddress),
+    Timeout(Option<cainome::cairo_serde::ContractAddress>),
     Null,
 }
 impl cainome::cairo_serde::CairoSerde for Outcome {
@@ -2724,6 +2725,11 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
             }
             Outcome::FailedToProvideProof(val) => {
                 cainome::cairo_serde::ContractAddress::cairo_serialized_size(val) + 1
+            }
+            Outcome::Timeout(val) => {
+                Option::<
+                    cainome::cairo_serde::ContractAddress,
+                >::cairo_serialized_size(val) + 1
             }
             Outcome::Null => 1,
             _ => 0,
@@ -2743,7 +2749,15 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
                 temp.extend(cainome::cairo_serde::ContractAddress::cairo_serialize(val));
                 temp
             }
-            Outcome::Null => usize::cairo_serialize(&2usize),
+            Outcome::Timeout(val) => {
+                let mut temp = vec![];
+                temp.extend(usize::cairo_serialize(&2usize));
+                temp.extend(
+                    Option::<cainome::cairo_serde::ContractAddress>::cairo_serialize(val),
+                );
+                temp
+            }
+            Outcome::Null => usize::cairo_serialize(&3usize),
             _ => vec![],
         }
     }
@@ -2774,7 +2788,16 @@ impl cainome::cairo_serde::CairoSerde for Outcome {
                     ),
                 )
             }
-            2usize => Ok(Outcome::Null),
+            2usize => {
+                Ok(
+                    Outcome::Timeout(
+                        Option::<
+                            cainome::cairo_serde::ContractAddress,
+                        >::cairo_deserialize(__felts, __offset + 1)?,
+                    ),
+                )
+            }
+            3usize => Ok(Outcome::Null),
             _ => {
                 return Err(
                     cainome::cairo_serde::Error::Deserialize(
@@ -3269,6 +3292,37 @@ impl<A: starknet_rust::accounts::ConnectedAccount + Sync> Starkwaves<A> {
         let __call = starknet_rust::core::types::Call {
             to: self.address,
             selector: starknet_rust::macros::selector!("attack"),
+            calldata: __calldata,
+        };
+        self.account.execute_v3(vec![__call])
+    }
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn claim_timeout_getcall(
+        &self,
+        game_id: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::core::types::Call {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
+        starknet_rust::core::types::Call {
+            to: self.address,
+            selector: starknet_rust::macros::selector!("claim_timeout"),
+            calldata: __calldata,
+        }
+    }
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn claim_timeout(
+        &self,
+        game_id: &starknet_rust::core::types::Felt,
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        __calldata.extend(starknet_rust::core::types::Felt::cairo_serialize(game_id));
+        let __call = starknet_rust::core::types::Call {
+            to: self.address,
+            selector: starknet_rust::macros::selector!("claim_timeout"),
             calldata: __calldata,
         };
         self.account.execute_v3(vec![__call])

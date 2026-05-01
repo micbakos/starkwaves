@@ -31,5 +31,6 @@ pub enum Outcome {
     #[default]
     Fair: ContractAddress,
     FailedToProvideProof: ContractAddress,
+    Timeout: Option<ContractAddress>,
     Null,
 }

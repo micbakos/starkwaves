@@ -2,7 +2,8 @@ use core::pedersen::pedersen;
 use merkle::{compute_merkle_root, generate_proof};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
-    start_cheat_caller_address,
+    start_cheat_block_timestamp_global, start_cheat_caller_address,
+    stop_cheat_block_timestamp_global,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
 use starkwaves::events::{AttackEvent, AttackResultEvent, GameOverEvent, GameRevealRequestEvent};
@@ -95,7 +96,6 @@ fn place(
 }
 
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_full_game_lifecycle() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -129,7 +129,6 @@ fn test_e2e_full_game_lifecycle() {
         };
 
         let mut spy = spy_events();
-        print!("Player {:?} attack at [{}, {}]", player, x, y);
         start_cheat_caller_address(contract_address, player);
         dispatcher.attack(game_id, x, y);
 
@@ -149,7 +148,6 @@ fn test_e2e_full_game_lifecycle() {
         } else {
             FireStatus::Miss(pedersen(false.into(), salt))
         };
-        println!(" => {}", status);
         start_cheat_caller_address(contract_address, opponent);
         dispatcher.defend(game_id, status, proof);
 
@@ -237,7 +235,6 @@ fn test_e2e_full_game_lifecycle() {
 /// Defender claims miss when the cell has a ship.
 /// Proof verification fails → FailedToProvideProof(defender).
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_defender_claims_miss_on_hit() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -289,7 +286,6 @@ fn test_e2e_defender_claims_miss_on_hit() {
 /// Defender claims hit when the cell is water.
 /// Proof verification fails → FailedToProvideProof(defender).
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_defender_claims_hit_on_miss() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -346,7 +342,6 @@ fn test_e2e_defender_claims_hit_on_miss() {
 /// Defender claims the wrong ship was destroyed (Destroyer instead of Cruiser).
 /// Destruction hash won't match at reveal → RevealStatus::Fake.
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_false_destruction_claim() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -433,7 +428,6 @@ fn test_e2e_false_destruction_claim() {
 /// Defender omits a destruction claim when the ship is actually sunk.
 /// Destruction hash won't match at reveal → RevealStatus::Fake.
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_omitted_destruction_claim() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -524,7 +518,6 @@ fn test_e2e_omitted_destruction_claim() {
 /// Player reveals with different ships than originally committed.
 /// Root mismatch → RevealStatus::Fake.
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_fake_reveal() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -610,7 +603,6 @@ fn test_e2e_fake_reveal() {
 
 /// Both players reveal with fake boards → Outcome::Null.
 #[test]
-#[fork("SEPOLIA_FORK")]
 fn test_e2e_both_cheat_reveal() {
     let contract_address = deploy_starkwaves();
     let dispatcher = IStarkwavesDispatcher { contract_address };
@@ -693,4 +685,420 @@ fn test_e2e_both_cheat_reveal() {
                 ),
             ],
         );
+}
+
+// ===============================
+// Timeout Tests
+// ===============================
+
+// Mirror the constants in src/types/phase.cairo. They are private there.
+const T0: u64 = 1_000_000;
+
+/// One player commits, the other doesn't. After the commit deadline,
+/// the committer can claim the timeout and wins.
+#[test]
+fn test_e2e_commit_timeout_one_committed() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    // Only A commits.
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.commit_board(0x111, game_id);
+
+    // Past the commit deadline.
+    start_cheat_block_timestamp_global(T0 + config.committing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(Some(player_b())),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// Neither player commits. After the deadline, claiming yields a Timeout outcome.
+#[test]
+fn test_e2e_commit_timeout_neither_committed() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    start_cheat_block_timestamp_global(T0 + config.committing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(None),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// A late commit_board call from the non-committer settles the game against them
+/// without needing claim_timeout — the per-action guard fires.
+#[test]
+fn test_e2e_commit_timeout_late_call_settles() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.commit_board(0x111, game_id);
+
+    start_cheat_block_timestamp_global(T0 + config.committing + 1);
+
+    // B shows up too late. Their commit_board call settles the game against them.
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.commit_board(0x222, game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(Some(player_b())),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// Both committed; A is supposed to attack but never does.
+/// B claims the timeout and wins.
+#[test]
+fn test_e2e_attack_timeout() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    let ships_a = create_6x6_ships();
+    let ships_b = create_6x6_ships();
+    let (_board_a, _salt_a, _board_b, _salt_b) = place(
+        dispatcher, contract_address, game_id, ships_a.span(), ships_b.span(),
+    );
+    // After place(), the second commit anchors last_action_at to the current cheat (T0).
+
+    start_cheat_block_timestamp_global(T0 + config.playing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_b());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(Some(player_a())),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// A attacks; B is supposed to defend but never does.
+/// A claims the timeout and wins.
+#[test]
+fn test_e2e_defend_timeout() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    let ships_a = create_6x6_ships();
+    let ships_b = create_6x6_ships();
+    let (_board_a, _salt_a, _board_b, _salt_b) = place(
+        dispatcher, contract_address, game_id, ships_a.span(), ships_b.span(),
+    );
+
+    // A attacks at T0+10. last_action_at = T0+10. B then has TURN_TIMEOUT to defend.
+    start_cheat_block_timestamp_global(T0 + 10);
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.attack(game_id, 0, 0);
+
+    start_cheat_block_timestamp_global(T0 + 10 + config.playing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(Some(player_b())),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// Game reaches reveal phase. A reveals; B doesn't. After the deadline,
+/// A claims and wins.
+#[test]
+fn test_e2e_reveal_timeout_one_revealed() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+    let size = board_size.size();
+
+    let ships_a = create_6x6_ships();
+    let ships_b = create_6x6_ships();
+    let (board_a, salt_a, board_b, salt_b) = place(
+        dispatcher, contract_address, game_id, ships_a.span(), ships_b.span(),
+    );
+    let board_a_span = board_a.span();
+    let board_b_span = board_b.span();
+
+    let play = |attacker: ContractAddress, x: u8, y: u8, hit: bool, destroyed: Option<ShipKind>| {
+        let (board, salt) = if attacker == player_a() {
+            (board_b_span, salt_b)
+        } else {
+            (board_a_span, salt_a)
+        };
+        let defender = if attacker == player_a() {
+            player_b()
+        } else {
+            player_a()
+        };
+
+        start_cheat_caller_address(contract_address, attacker);
+        dispatcher.attack(game_id, x, y);
+
+        let proof = generate_proof(board, salt, (x * size + y).into());
+        let status = if hit {
+            FireStatus::Hit((destroyed, pedersen(true.into(), salt)))
+        } else {
+            FireStatus::Miss(pedersen(false.into(), salt))
+        };
+        start_cheat_caller_address(contract_address, defender);
+        dispatcher.defend(game_id, status, proof);
+    };
+
+    // A sweeps B's board; turns happen instantaneously at T0 (the cheat is global
+    // and we don't advance it). last_action_at gets bumped to T0 on each defend.
+    play(player_a(), 0, 0, true, None);
+    play(player_b(), 5, 5, false, None);
+
+    play(player_a(), 0, 1, true, None);
+    play(player_b(), 5, 4, false, None);
+
+    play(player_a(), 0, 2, true, Some(ShipKind::Cruiser));
+    play(player_b(), 5, 3, false, None);
+
+    play(player_a(), 1, 0, true, None);
+    play(player_b(), 5, 2, false, None);
+
+    play(player_a(), 1, 1, true, Some(ShipKind::Destroyer)); // Game over → reveal phase
+
+    // A reveals on time.
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.reveal(game_id, ships_a, salt_a);
+
+    // Past the reveal deadline anchored to the last defend (still at T0).
+    start_cheat_block_timestamp_global(T0 + config.revealing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(Some(player_b())),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// Game reaches reveal phase but neither player reveals. Outcome::Timeout.
+#[test]
+fn test_e2e_reveal_timeout_neither_revealed() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+    let size = board_size.size();
+
+    let ships_a = create_6x6_ships();
+    let ships_b = create_6x6_ships();
+    let (board_a, salt_a, board_b, salt_b) = place(
+        dispatcher, contract_address, game_id, ships_a.span(), ships_b.span(),
+    );
+    let board_a_span = board_a.span();
+    let board_b_span = board_b.span();
+
+    let play = |attacker: ContractAddress, x: u8, y: u8, hit: bool, destroyed: Option<ShipKind>| {
+        let (board, salt) = if attacker == player_a() {
+            (board_b_span, salt_b)
+        } else {
+            (board_a_span, salt_a)
+        };
+        let defender = if attacker == player_a() {
+            player_b()
+        } else {
+            player_a()
+        };
+
+        start_cheat_caller_address(contract_address, attacker);
+        dispatcher.attack(game_id, x, y);
+
+        let proof = generate_proof(board, salt, (x * size + y).into());
+        let status = if hit {
+            FireStatus::Hit((destroyed, pedersen(true.into(), salt)))
+        } else {
+            FireStatus::Miss(pedersen(false.into(), salt))
+        };
+        start_cheat_caller_address(contract_address, defender);
+        dispatcher.defend(game_id, status, proof);
+    };
+
+    play(player_a(), 0, 0, true, None);
+    play(player_b(), 5, 5, false, None);
+    play(player_a(), 0, 1, true, None);
+    play(player_b(), 5, 4, false, None);
+    play(player_a(), 0, 2, true, Some(ShipKind::Cruiser));
+    play(player_b(), 5, 3, false, None);
+    play(player_a(), 1, 0, true, None);
+    play(player_b(), 5, 2, false, None);
+    play(player_a(), 1, 1, true, Some(ShipKind::Destroyer)); // → reveal phase
+
+    start_cheat_block_timestamp_global(T0 + config.revealing + 1);
+
+    let mut spy = spy_events();
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GameOver(
+                        GameOverEvent {
+                            game_id,
+                            player_a: player_a(),
+                            player_b: player_b(),
+                            outcome: Outcome::Timeout(None),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    stop_cheat_block_timestamp_global();
+}
+
+/// claim_timeout reverts when no deadline has been crossed.
+#[test]
+#[should_panic(expected: "The game is not timed out yet")]
+fn test_e2e_claim_timeout_too_early_reverts() {
+    let contract_address = deploy_starkwaves();
+    let dispatcher = IStarkwavesDispatcher { contract_address };
+    let board_size = BoardSize::Smaller(SmallerBoardSize::SixBySix);
+    let config = dispatcher.get_timeout_config();
+
+    start_cheat_block_timestamp_global(T0);
+    let game_id = start_game(dispatcher, contract_address, player_a(), player_b(), board_size);
+
+    // Still within the commit window.
+    start_cheat_block_timestamp_global(T0 + config.committing - 1);
+
+    start_cheat_caller_address(contract_address, player_a());
+    dispatcher.claim_timeout(game_id);
 }

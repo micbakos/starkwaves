@@ -1,6 +1,7 @@
 pub mod board;
 pub mod fire;
 pub mod outcome;
+pub mod phase;
 pub mod ship;
 
 pub use board::{AllBoardSizesTrait, BoardSize, BoardSizeTrait, LargerBoardSize, SmallerBoardSize};

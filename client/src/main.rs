@@ -9,6 +9,9 @@ use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
 use std::process::exit;
 use std::sync::Arc;
+use starknet_rust::accounts::Account;
+use starkwaves_client::types::contract::starkwaves::Outcome;
+use starkwaves_client::types::game_state::InGameState;
 
 #[derive(Parser, Debug)]
 #[command(name = "starkwaves")]
@@ -121,6 +124,18 @@ async fn main() {
                         println!("It is opponent's turn!");
                     }
                 },
+                ["claimTimeout"] => {
+                    let game = game.lock().await;
+
+                    let outcome = game.claim_timeout().await.unwrap_or_else(|e| {
+                        log::error!("Reveal failed: {e}");
+                        None
+                    });
+
+                    if let Some(outcome) = outcome {
+                        print_callback.on_update(GameUpdate::GameOver { outcome }).await;
+                    }
+                },
                 ["quit"] => {
                     println!("Exiting...");
                     exit(0);
@@ -128,10 +143,17 @@ async fn main() {
                 _ => {
                     println!("Commands:");
                     println!("\t- place <type> <x> <y> <h|v>");
+                    println!("\t\tPosition your ship on [x, y]  horizontally (h) or vertically (v).");
                     println!("\t- attack <x> <y>");
+                    println!("\t\tAttack your opponent at [x, y].");
                     println!("\t- turn");
+                    println!("\t\tQuery whose turn is it.");
                     println!("\t- boards");
+                    println!("\t\tDisplay your and your opponent's boards.");
+                    println!("\t- claimTimeout");
+                    println!("\t\tIf the opponent is taking too long to respond, you can claim timeout and win.");
                     println!("\t- quit");
+                    println!("\t\tQuit the game.");
                 }
             }
 
@@ -190,12 +212,17 @@ impl GameCallback for PrintCallback {
                         println!("Game over, YOU WON!");
                         if reason == Reason::FailedToProvideProof {
                             println!("The opponent failed to provide proof of their board");
+                        } else if reason == Reason::TimedOut {
+                            println!("The opponent failed to play in time.");
                         }
                     },
                     GameOverOutcome::Lost(reason) => {
                         match reason {
                             Reason::FairGame => println!("Game over, You Lost :("),
                             Reason::FailedToProvideProof => println!("Game over, you failed to provide proof of your board"),
+                            Reason::TimedOut => {
+                                println!("Game over, you failed to play in time.");
+                            }
                         }
                     }
                 }

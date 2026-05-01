@@ -1,6 +1,6 @@
 use core::{fmt::Display, str};
 
-use crypto_bigint::{ArrayEncoding, CheckedAdd, CheckedMul, CheckedSub, Zero};
+use crypto_bigint::{ArrayEncoding, CheckedAdd, CheckedSub};
 
 use crate::types::Felt;
 

@@ -1,6 +1,7 @@
 use core::pedersen::pedersen;
 use starknet::ContractAddress;
 use crate::types::board::{hulls_to_merkle_leaves, ships_to_hulls};
+use crate::types::phase::{GamePhase, GamePhaseTrait};
 use crate::types::{
     BoardSize, BoardSizeTrait, FireStatus, FireStatusTrait, HitReport, Outcome, OutcomeBeforeReveal,
     OutcomeBeforeRevealTrait, RevealStatus, Ship, ShipKindTrait,
@@ -29,6 +30,7 @@ pub struct Game {
     pub outcome_before_reveal: Option<OutcomeBeforeReveal>,
     pub player_a_reveal_status: Option<RevealStatus>,
     pub player_b_reveal_status: Option<RevealStatus>,
+    pub last_action_at: u64,
 }
 
 impl GameDefault of Default<Game> {
@@ -52,6 +54,7 @@ impl GameDefault of Default<Game> {
             outcome_before_reveal: None,
             player_a_reveal_status: None,
             player_b_reveal_status: None,
+            last_action_at: 0,
         }
     }
 }
@@ -63,7 +66,11 @@ pub impl GameImpl of GameTrait {
     }
 
     fn new(
-        id: felt252, player_a: ContractAddress, player_b: ContractAddress, board_size: BoardSize,
+        id: felt252,
+        player_a: ContractAddress,
+        player_b: ContractAddress,
+        board_size: BoardSize,
+        now: u64,
     ) -> Game {
         Game {
             id,
@@ -83,17 +90,18 @@ pub impl GameImpl of GameTrait {
             outcome_before_reveal: None,
             player_a_reveal_status: None,
             player_b_reveal_status: None,
+            last_action_at: now,
         }
     }
 
-    fn commit_root(ref self: Game, player: ContractAddress, root: felt252) {
+    fn commit_root(ref self: Game, player: ContractAddress, root: felt252, now: u64) {
         if self.player_a == player {
             assert!(
                 self.player_a_root.is_none(),
                 "Player {:?} has already committed the board.",
                 player,
             );
-            self.player_a_root = Some(root)
+            self.player_a_root = Some(root);
         } else if self.player_b == player {
             assert!(
                 self.player_b_root.is_none(),
@@ -107,10 +115,11 @@ pub impl GameImpl of GameTrait {
 
         if self.player_a_root.is_some() && self.player_b_root.is_some() {
             self.attacking_player = Some(self.player_a);
+            self.last_action_at = now;
         }
     }
 
-    fn register_attack(ref self: Game, player: ContractAddress, x: u8, y: u8) {
+    fn register_attack(ref self: Game, player: ContractAddress, x: u8, y: u8, now: u64) {
         let size = self.board_size.size();
         assert!(x < size && y < size, "Attack on ({}, {}) is out of bounds", x, y);
 
@@ -130,10 +139,16 @@ pub impl GameImpl of GameTrait {
         } else {
             assert!(false, "Player {:?} cannot attack in the game {} yet.", player, self.id);
         }
+
+        self.last_action_at = now;
     }
 
     fn defend(
-        ref self: Game, player: ContractAddress, status: FireStatus, proof: Array<felt252>,
+        ref self: Game,
+        player: ContractAddress,
+        status: FireStatus,
+        proof: Array<felt252>,
+        now: u64,
     ) -> Option<HitReport> {
         let attacking_player = self.attacking_player.expect('Attacker not attacked yet.');
         assert!(
@@ -154,6 +169,8 @@ pub impl GameImpl of GameTrait {
             self.player_a_root
         }
             .expect('Commit root should exist.');
+        self.last_action_at = now;
+
         let verified = merkle::verify(status.salted_status(), proof, defending_root, offset);
 
         if !verified {
@@ -201,7 +218,7 @@ pub impl GameImpl of GameTrait {
     }
 
     fn reveal(
-        ref self: Game, player: ContractAddress, ships: Array<Ship>, salt: felt252,
+        ref self: Game, player: ContractAddress, ships: Array<Ship>, salt: felt252, now: u64,
     ) -> Option<Outcome> {
         assert!(self.outcome_before_reveal.is_some(), "The game is not finished yet.");
 
@@ -261,6 +278,7 @@ pub impl GameImpl of GameTrait {
             return None;
         }
 
+        self.last_action_at = now;
         Some(self.compute_final_outcome())
     }
 
@@ -276,6 +294,72 @@ pub impl GameImpl of GameTrait {
                     }
                 },
             )
+    }
+
+    fn check_timeout(self: @Game, now: u64) -> Option<Outcome> {
+        let phase = self.phase();
+
+        let timeout = GamePhaseTrait::is_timeout_reached(@phase, now, *self.last_action_at);
+
+        if !timeout {
+            return None;
+        }
+
+        match phase {
+            GamePhase::Committing => {
+                let root_a = self.player_a_root;
+                let root_b = self.player_b_root;
+
+                if root_a.is_none() && root_b.is_none() {
+                    Some(Outcome::Timeout(None))
+                } else if root_a.is_some() && root_b.is_some() {
+                    assert!(
+                        false,
+                        "Unexpected error: Game not started when both players have committed roots.",
+                    );
+                    None
+                } else if root_a.is_some() {
+                    Some(Outcome::Timeout(Some(*self.player_b)))
+                } else {
+                    Some(Outcome::Timeout(Some(*self.player_a)))
+                }
+            },
+            GamePhase::Playing => {
+                let attacker = (*self.attacking_player).unwrap();
+                let attacker_has_bombed = self
+                    .bomb_offset_at_turn(@attacker, *self.turn_index)
+                    .is_some();
+                let inactive = if attacker_has_bombed {
+                    if attacker == *self.player_a {
+                        *self.player_b
+                    } else {
+                        *self.player_a
+                    }
+                } else {
+                    attacker
+                };
+
+                Some(Outcome::Timeout(Some(inactive)))
+            },
+            GamePhase::Revealing => {
+                let a_revealed = self.player_a_reveal_status.is_some();
+                let b_revealed = self.player_b_reveal_status.is_some();
+
+                if !a_revealed && !b_revealed {
+                    Some(Outcome::Timeout(None))
+                } else if a_revealed && b_revealed {
+                    assert!(
+                        false,
+                        "Unexpected error: Game not ended when both players have revealed their boards.",
+                    );
+                    None
+                } else if a_revealed {
+                    Some(Outcome::Timeout(Some(*self.player_b)))
+                } else {
+                    Some(Outcome::Timeout(Some(*self.player_a)))
+                }
+            },
+        }
     }
 }
 
@@ -331,6 +415,16 @@ impl InternalGameImpl of InternalGameTrait {
             self.player_a_hits_on_b += 1;
         } else {
             self.player_b_hits_on_a += 1;
+        }
+    }
+
+    fn phase(self: @Game) -> GamePhase {
+        if self.outcome_before_reveal.is_some() {
+            GamePhase::Revealing
+        } else if self.attacking_player.is_none() {
+            GamePhase::Committing
+        } else {
+            GamePhase::Playing
         }
     }
 }

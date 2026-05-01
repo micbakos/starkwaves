@@ -1,7 +1,6 @@
 use crate::types::board_size::BoardSize;
-use crate::types::contract::mappings::{IntoEvents, in_game_event_keys, in_lobby_event_keys};
-use crate::types::contract::starkwaves::{Event, Ship as ContractShip};
-use crate::types::contract::starkwaves::{Outcome, Starkwaves};
+use crate::types::contract::mappings::{in_game_event_keys, in_lobby_event_keys, IntoEvents};
+use crate::types::contract::starkwaves::{Event, Ship as ContractShip, Starkwaves};
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
 use crate::types::game_over_outcome::GameOverOutcome;
@@ -16,14 +15,14 @@ use starknet_rust::{
     accounts::ConnectedAccount,
     core::types::{Felt, InvokeTransactionResult},
 };
+use starknet_rust_core::types::{AddressFilter, ConfirmedBlockId, L2TransactionFinalityStatus};
 use starknet_rust_tokio_tungstenite::{EventSubscriptionOptions, EventsUpdate, TungsteniteStream};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use starknet_rust_core::types::{AddressFilter, ConfirmedBlockId, L2TransactionFinalityStatus};
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use url::Url;
 
@@ -310,7 +309,7 @@ where
         Ok(report)
     }
 
-    pub async fn reveal(&mut self) -> Result<Option<Outcome>> {
+    pub async fn reveal(&mut self) -> Result<Option<GameOverOutcome>> {
         let salt = self.salt;
         let (game_id, board) = {
             let game = self.in_game_data()?;
@@ -336,7 +335,28 @@ where
             })
         });
 
-        Ok(outcome)
+        Ok(outcome.map(|o| GameOverOutcome::from(o, self.player_address())))
+    }
+
+    pub async fn claim_timeout(&self) -> Result<Option<GameOverOutcome>> {
+        let game = &self.state.as_in_game().ok_or(GameError::GameNotStarted)?;
+        let game_id = game.game_id;
+
+        let contract = self.contract();
+        let execution = contract.claim_timeout(&game_id).gas_estimate_multiplier(5.0);
+        let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
+        let receipt_info = wait_success(self.player.provider(), result.transaction_hash)
+            .await
+            .map_err(|e| e.into())?;
+
+        let outcome = receipt_info.receipt.into_events().ok().and_then(|events| {
+            events.into_iter().find_map(|e| match e {
+                Event::GameOver(go) => Some(go.outcome),
+                _ => None,
+            })
+        });
+
+        Ok(outcome.map(|o| GameOverOutcome::from(o, self.player_address())))
     }
 
     pub fn opponent(&self) -> Option<ContractAddress> {
@@ -645,11 +665,7 @@ where
                     let in_game = self.in_game_data()?;
                     if !matches!(in_game.state, InGameState::Ended) {
                         in_game.state = InGameState::Ended;
-                        callback
-                            .on_update(GameUpdate::GameOver {
-                                outcome: GameOverOutcome::from(outcome, self.player_address()),
-                            })
-                            .await;
+                        callback.on_update(GameUpdate::GameOver { outcome }).await;
                     }
                 }
             }

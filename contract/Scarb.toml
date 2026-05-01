@@ -19,7 +19,6 @@ assert_macros = "2.18.0"
 
 [scripts]
 test = "snforge test"
-test-e2e = "bash test-e2e.sh"
 
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
@@ -34,13 +33,6 @@ casm = true
 # exit_first = true                                          # Stop tests execution immediately upon the first failure
 # fuzzer_runs = 1234                                         # Number of runs of the random fuzzer
 # fuzzer_seed = 1111                                         # Seed for the random fuzzer
-
-# Fork testing: point to starknet-devnet forking Sepolia, or directly to Sepolia RPC.
-# Start devnet with: starknet-devnet --fork-network https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/<YOUR_KEY>
-[[tool.snforge.fork]]
-name = "SEPOLIA_FORK"
-url = "http://127.0.0.1:5050"
-block_id.tag = "latest"
 
 # To fork Sepolia directly (without devnet):
 # [[tool.snforge.fork]]

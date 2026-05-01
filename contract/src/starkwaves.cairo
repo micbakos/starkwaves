@@ -1,3 +1,4 @@
+use crate::types::phase::TimeoutConfig;
 use crate::types::{BoardSize, FireStatus, Ship};
 
 #[starknet::interface]
@@ -14,9 +15,13 @@ pub trait IStarkwaves<TContractState> {
 
     fn reveal(ref self: TContractState, game_id: felt252, ships: Array<Ship>, salt: felt252);
 
+    fn claim_timeout(ref self: TContractState, game_id: felt252);
+
     fn reset(ref self: TContractState);
 
     fn get_next_game_id(self: @TContractState) -> felt252;
+
+    fn get_timeout_config(self: @TContractState) -> TimeoutConfig;
 }
 
 #[starknet::contract]
@@ -34,8 +39,8 @@ pub mod Starkwaves {
         PlayerEnteredLobbyEvent, PlayersAssembledEvent, ResetEvent,
     };
     use crate::game::{Game, GameTrait};
-    use crate::types::{AllBoardSizesTrait, BoardSizeTrait};
-    use super::{*, BoardSize, FireStatus};
+    use crate::types::{AllBoardSizesTrait, BoardSizeTrait, Outcome};
+    use super::{*, BoardSize, FireStatus, TimeoutConfig};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     #[abi(embed_v0)]
@@ -110,7 +115,12 @@ pub mod Starkwaves {
             let player = self.assert_player_in_game(game_id);
 
             let mut game = self.open_games.read(game_id);
-            game.commit_root(player, root);
+            let now = get_block_timestamp();
+            if self.settle_timeout(@game, now) {
+                return;
+            }
+
+            game.commit_root(player, root, now);
             self.open_games.entry(game_id).write(game.clone());
 
             if let Some(attacking_player) = game.attacking_player {
@@ -128,7 +138,12 @@ pub mod Starkwaves {
             let player = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            game.register_attack(player, x, y);
+            let now = get_block_timestamp();
+            if self.settle_timeout(@game, now) {
+                return;
+            }
+
+            game.register_attack(player, x, y, now);
 
             self.open_games.entry(game_id).write(game);
             self.emit(AttackEvent { game_id, player, x, y })
@@ -140,7 +155,12 @@ pub mod Starkwaves {
             let defender = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            let hit_report = game.defend(defender, status, proof);
+            let now = get_block_timestamp();
+            if self.settle_timeout(@game, now) {
+                return;
+            }
+
+            let hit_report = game.defend(defender, status, proof, now);
             self.open_games.entry(game_id).write(game.clone());
 
             if let Some(report) = hit_report {
@@ -172,25 +192,25 @@ pub mod Starkwaves {
             let player = self.assert_player_in_game(game_id);
             let mut game = self.open_games.read(game_id);
 
-            let outcome = game.reveal(player, ships, salt);
+            let now = get_block_timestamp();
+            if self.settle_timeout(@game, now) {
+                return;
+            }
+
+            let outcome = game.reveal(player, ships, salt, now);
 
             if let Some(final_outcome) = outcome {
-                self.open_games_per_player.entry(game.player_a).write(0);
-                self.open_games_per_player.entry(game.player_b).write(0);
-                self.open_games.entry(game_id).write(Default::default());
-
-                self
-                    .emit(
-                        GameOverEvent {
-                            game_id: game.id,
-                            player_a: game.player_a,
-                            player_b: game.player_b,
-                            outcome: final_outcome,
-                        },
-                    );
+                self.handle_game_over(@game, final_outcome);
             } else {
                 self.open_games.entry(game_id).write(game.clone());
             }
+        }
+
+        fn claim_timeout(ref self: ContractState, game_id: felt252) {
+            self.assert_player_in_game(game_id);
+            let game = self.open_games.read(game_id);
+            let now = get_block_timestamp();
+            assert!(self.settle_timeout(@game, now), "The game is not timed out yet.")
         }
 
         fn reset(ref self: ContractState) {
@@ -228,6 +248,10 @@ pub mod Starkwaves {
         fn get_next_game_id(self: @ContractState) -> felt252 {
             self.next_game_id.read()
         }
+
+        fn get_timeout_config(self: @ContractState) -> TimeoutConfig {
+            Default::default()
+        }
     }
 
     #[generate_trait]
@@ -239,7 +263,9 @@ pub mod Starkwaves {
             let player_b = opponent;
 
             let game_id = self.next_game_id.read();
-            let game = GameTrait::new(game_id, player_a, player_b, board_size);
+            let game = GameTrait::new(
+                game_id, player_a, player_b, board_size, get_block_timestamp(),
+            );
 
             self.open_games_per_player.entry(player_a).write(game_id);
             self.open_games_per_player.entry(player_b).write(game_id);
@@ -260,6 +286,36 @@ pub mod Starkwaves {
             );
 
             player
+        }
+
+        fn settle_timeout(ref self: ContractState, game: @Game, now: u64) -> bool {
+            if let Some(outcome) = game.check_timeout(now) {
+                self.handle_game_over(game, outcome);
+
+                return true;
+            }
+
+            false
+        }
+
+        fn handle_game_over(ref self: ContractState, game: @Game, outcome: Outcome) {
+            let game_id = game.id;
+            let player_a = game.player_a;
+            let player_b = game.player_b;
+
+            self.open_games_per_player.entry(*player_a).write(0);
+            self.open_games_per_player.entry(*player_b).write(0);
+            self.open_games.entry(*game_id).write(Default::default());
+
+            self
+                .emit(
+                    GameOverEvent {
+                        game_id: *game_id,
+                        player_a: *player_a,
+                        player_b: *player_b,
+                        outcome: outcome,
+                    },
+                );
         }
     }
 }

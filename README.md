@@ -29,28 +29,28 @@ starkwaves/
 ### Environment Configuration
 Different environments can be set, according to where do you deploy your contract.
 1. Create an `.env` file with the following content
-```
-# This helps the scripts identify which env to be used in order to deploy and run the game
-PRESET=sepolia # This config will use .env.sepolia 
-```
+    ```
+    # This helps the scripts identify which env to be used in order to deploy and run the game
+    PRESET=sepolia # This config will use .env.sepolia 
+    ```
 2. Then create an `.env.<preset>` for each environment
 
-Copy `.env.example` to `.env.sepolia` (or `.env.devnet` for local development) and fill in the values:
-
-```
-CHAIN_ID=              # e.g. SN_SEPOLIA
-DEPLOY_RPC_URL=        # RPC endpoint for deployment
-RPC_URL=               # RPC endpoint for gameplay
-WS_URL=                # WebSocket endpoint for events
-DEPLOY_ACCOUNT_NAME=   # sncast account name
-CONTRACT_ADDR=         # Deployed contract address (auto updated by deploy script)
-
-# The rest of the variables are used for testing the game with Player A/B presets.
-PRESET_A_PRIVATE_KEY=  # Player A private key
-PRESET_A_ADDRESS=      # Player A address
-PRESET_B_PRIVATE_KEY=  # Player B private key
-PRESET_B_ADDRESS=      # Player B address
-```
+    Copy `.env.example` to `.env.sepolia` (or `.env.devnet` for local development) and fill in the values:
+    
+    ```
+    CHAIN_ID=              # e.g. SN_SEPOLIA
+    DEPLOY_RPC_URL=        # RPC endpoint for deployment
+    RPC_URL=               # RPC endpoint for gameplay
+    WS_URL=                # WebSocket endpoint for events
+    DEPLOY_ACCOUNT_NAME=   # sncast account name
+    CONTRACT_ADDR=         # Deployed contract address (auto updated by deploy script)
+    
+    # The rest of the variables are used for testing the game with Player A/B presets.
+    PRESET_A_PRIVATE_KEY=  # Player A private key
+    PRESET_A_ADDRESS=      # Player A address
+    PRESET_B_PRIVATE_KEY=  # Player B private key
+    PRESET_B_ADDRESS=      # Player B address
+    ```
 
 ### Running Contract Tests
 
@@ -59,13 +59,6 @@ Unit tests:
 ```bash
 cd contract
 scarb test
-```
-
-End-to-end tests (requires `DEPLOY_RPC_URL` set in `.env.sepolia`):
-
-```bash
-cd client
-./test-e2e.sh
 ```
 
 The e2e script starts a local `starknet-devnet` instance forking from the configured Sepolia RPC, waits for it to be ready, then runs snforge fork tests against it.
@@ -125,25 +118,25 @@ quit
 
 The game supports multiple board sizes. The board size determines which ships are available and how many of each.
 
-| Board Size | Dimensions |
-|---|---|
-| SixBySix | 6x6 |
-| EightByEight | 8x8 |
-| Standard | 10x10 |
-| TwelveByTwelve | 12x12 |
-| FourteenByFourteen | 14x14 |
-| TwentyByTwenty | 20x20 |
+| Dimensions | Type     |
+|------------|----------|
+| 6x6        | Smaller  |
+| 8x8        | Smaller  |
+| 10x10      | Standard |
+| 12x12      | Larger   |
+| 14x14      | Larger   | 
+| 20x20      | Larger   |
 
 ### Ships
 
-| Ship | Abbreviation | Length |
-|---|---|---|
-| Destroyer | DE | 2 |
-| Cruiser | CR | 3 |
-| Submarine | SU | 3 |
-| Battleship | BA | 4 |
-| Carrier | CA | 5 |
-| SuperCarrier | SC | 6 |
+| Ship         | Abbreviation | Length |
+|--------------|--------------|--------|
+| Destroyer    | DE           | 2      |
+| Cruiser      | CR           | 3      |
+| Submarine    | SU           | 3      |
+| Battleship   | BA           | 4      |
+| Carrier      | CA           | 5      |
+| SuperCarrier | SC           | 6      |
 
 ### Fleet Composition by Board Size
 
@@ -201,19 +194,19 @@ After both players reveal, the contract determines the final outcome:
 
 ### On-Chain Verification Summary
 
-| What is verified | When | How |
-|---|---|---|
-| Defense response matches committed board | Each defend call | Merkle proof against committed root |
-| Revealed board matches commitment | Reveal phase | Recompute Merkle root from ships + salt |
-| Destruction claims were truthful | Reveal phase | Replay bombs, reconstruct destruction hash |
-| Ship placements are valid (no overlaps) | Reveal phase | Collision check during hull construction |
+| What is verified                         | When             | How                                        |
+|------------------------------------------|------------------|--------------------------------------------|
+| Defense response matches committed board | Each defend call | Merkle proof against committed root        |
+| Revealed board matches commitment        | Reveal phase     | Recompute Merkle root from ships + salt    |
+| Destruction claims were truthful         | Reveal phase     | Replay bombs, reconstruct destruction hash |
+| Ship placements are valid (no overlaps)  | Reveal phase     | Collision check during hull construction   |
 
-This design ensures that players cannot lie about hits, misses, or ship destructions without being caught at reveal time. The only information visible on-chain during gameplay is which coordinates were attacked and whether they were hits or misses -- the actual ship positions remain private until the game concludes.
+This design ensures that players cannot lie about hits, misses, or ship destructions without being caught at reveal time. The only information visible on-chain during gameplay is which coordinates were attacked and whether they were hits or misses. The actual ship positions remain private until the game concludes.
 
 ## Caveats and Future Considerations
 
 - [ ] **The CLI client is minimal.** It exists as a proof of concept for interacting with the contract. The client can serve as middleware for any game frontend that wants to provide a richer UI on top of the same contract.
-- [ ] **No time limits are enforced.** The contract does not currently penalize players for inactivity. A player can start a game and stall indefinitely without consequence. A timeout mechanism could be added in the future to forfeit inactive players.
+- [X] ~~**No time limits are enforced.** The contract does not currently penalize players for inactivity. A player can start a game and stall indefinitely without consequence. A timeout mechanism could be added in the future to forfeit inactive players.~~
 - [X] ~~**Contract reset does not notify clients.** When the contract owner calls `reset`, all game state is cleared, but connected clients are not aware of this. In the future, clients should handle this gracefully, either by listening for a reset event or by detecting stale game state.~~
 - [ ] **No game resumption after disconnect.** If a player quits, the contract is not notified and there is currently no way to resume the game from the client. This is fairly easily fixable: if the player remembers the salt and reconstructs the board, the Merkle root can be recomputed, verified against the on-chain commitment, and the game can resume since all state is stored on-chain.
 - [ ] **Ships are linear only.** All ships occupy a straight line of cells, either horizontal or vertical. Non-linear shapes (e.g. L-shaped ships) are not currently supported but could be added without affecting the core commit-reveal and verification logic.

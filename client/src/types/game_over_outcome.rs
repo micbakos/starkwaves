@@ -11,6 +11,7 @@ pub enum GameOverOutcome {
 pub enum Reason {
     FairGame,
     FailedToProvideProof,
+    TimedOut
 }
 
 impl GameOverOutcome {
@@ -32,6 +33,18 @@ impl GameOverOutcome {
             }
             Outcome::Null => {
                 GameOverOutcome::Lost(Reason::FailedToProvideProof)
+            }
+            Outcome::Timeout(maybe_loser) => {
+                if let Some(loser) = maybe_loser {
+                    if loser == player_address {
+                        GameOverOutcome::Lost(Reason::TimedOut)
+                    } else {
+                        GameOverOutcome::Won(Reason::TimedOut)
+                    }
+                } else {
+                    GameOverOutcome::Lost(Reason::TimedOut)
+                }
+
             }
         }
     }
