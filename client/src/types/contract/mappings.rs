@@ -1,4 +1,4 @@
-use crate::types::contract::starkwaves::{
+use crate::types::contract::generated::{
     Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind,
 };
 use crate::types::error::GameError;
@@ -6,6 +6,8 @@ use crate::types::{Orientation, Ship, ShipKind};
 use starknet_rust::core::types::TransactionReceipt;
 use starknet_rust::core::types::{Event as StarknetEvent, Felt};
 use starknet_rust::macros::selector;
+use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+use crate::types::contract::generated;
 
 pub trait IntoEvents {
     fn into_events(self) -> Result<Vec<Event>, GameError>;
@@ -71,6 +73,64 @@ impl Into<ShipKind> for ContractShipKind {
             ContractShipKind::Submarine => ShipKind::Submarine,
             ContractShipKind::Destroyer => ShipKind::Destroyer,
             ContractShipKind::SuperCarrier => ShipKind::SuperCarrier,
+        }
+    }
+}
+
+impl Into<generated::BoardSize> for BoardSize {
+    fn into(self) -> generated::BoardSize {
+        match self {
+            BoardSize::Standard => generated::BoardSize::Standard,
+            BoardSize::Smaller(smaller) => generated::BoardSize::Smaller(smaller.into()),
+            BoardSize::Larger(larger) => generated::BoardSize::Larger(larger.into()),
+        }
+    }
+}
+
+impl From<generated::BoardSize> for BoardSize {
+    fn from(value: generated::BoardSize) -> Self {
+        match value {
+            generated::BoardSize::Standard => BoardSize::Standard,
+            generated::BoardSize::Smaller(smaller) => BoardSize::Smaller(smaller.into()),
+            generated::BoardSize::Larger(larger) => BoardSize::Larger(larger.into()),
+        }
+    }
+}
+
+impl Into<generated::SmallerBoardSize> for SmallerBoardSize {
+    fn into(self) -> generated::SmallerBoardSize {
+        match self {
+            SmallerBoardSize::SixBySix => generated::SmallerBoardSize::SixBySix,
+            SmallerBoardSize::EightByEight => generated::SmallerBoardSize::EightByEight,
+        }
+    }
+}
+
+impl From<generated::SmallerBoardSize> for SmallerBoardSize {
+    fn from(value: generated::SmallerBoardSize) -> Self {
+        match value {
+            generated::SmallerBoardSize::SixBySix => SmallerBoardSize::SixBySix,
+            generated::SmallerBoardSize::EightByEight => SmallerBoardSize::EightByEight,
+        }
+    }
+}
+
+impl Into<generated::LargerBoardSize> for LargerBoardSize {
+    fn into(self) -> generated::LargerBoardSize {
+        match self {
+            LargerBoardSize::TwelveByTwelve => generated::LargerBoardSize::TwelveByTwelve,
+            LargerBoardSize::FourteenByFourteen => generated::LargerBoardSize::FourteenByFourteen,
+            LargerBoardSize::TwentyByTwenty => generated::LargerBoardSize::TwentyByTwenty,
+        }
+    }
+}
+
+impl From<generated::LargerBoardSize> for LargerBoardSize {
+    fn from(value: generated::LargerBoardSize) -> Self {
+        match value {
+            generated::LargerBoardSize::TwelveByTwelve => LargerBoardSize::TwelveByTwelve,
+            generated::LargerBoardSize::FourteenByFourteen => LargerBoardSize::FourteenByFourteen,
+            generated::LargerBoardSize::TwentyByTwenty => LargerBoardSize::TwentyByTwenty
         }
     }
 }

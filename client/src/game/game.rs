@@ -1,20 +1,18 @@
 use crate::types::board_size::BoardSize;
+use crate::types::contract::generated::Event;
 use crate::types::contract::mappings::{in_game_event_keys, in_lobby_event_keys, IntoEvents};
-use crate::types::contract::starkwaves::{Event, Ship as ContractShip, Starkwaves};
+use crate::types::contract::starkwaves::Starkwaves;
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
+use crate::types::game_account::GameAccount;
 use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
 use crate::types::result::Result;
 use crate::types::{Board, Ship, ShipKind};
-use crate::utils::wait_success;
 use async_trait::async_trait;
 use cainome::cairo_serde::ContractAddress;
 use log::info;
-use starknet_rust::{
-    accounts::ConnectedAccount,
-    core::types::{Felt, InvokeTransactionResult},
-};
+use starknet_rust::core::types::Felt;
 use starknet_rust_core::types::{AddressFilter, ConfirmedBlockId, L2TransactionFinalityStatus};
 use starknet_rust_tokio_tungstenite::{EventSubscriptionOptions, EventsUpdate, TungsteniteStream};
 use std::future::Future;
@@ -70,10 +68,7 @@ pub trait GameCallback: Send + Sync {
     async fn on_update(&self, update: GameUpdate);
 }
 
-pub struct Game<A>
-where
-    A: ConnectedAccount + Sync,
-{
+pub struct Game<A: GameAccount> {
     contract_address: Felt,
     player: A,
     ws_url: Url,
@@ -86,7 +81,7 @@ where
 
 impl<A> Game<A>
 where
-    A: ConnectedAccount + Sync + Send + 'static,
+    A: GameAccount + Send + 'static,
     A::Provider: Send + Sync,
 {
     pub fn player_address(&self) -> ContractAddress {
@@ -102,18 +97,11 @@ where
     ) -> Result<Arc<Mutex<Self>>> {
         info!("Joining lobby {}", board_size);
         info!("Your Address {:#x}", player.address());
+        let contract = Starkwaves::new(contract_address);
 
-        let contract = Starkwaves::new(contract_address, &player);
-
-        let execution = contract.request_start_game(&board_size.into())
-            .gas_estimate_multiplier(5.0);
-        let result = execution.send().await.map_err(|e| {
-            e.into()
-        })?;
-        let provider = player.provider();
-        let (events, block_number) = wait_success(provider, result.transaction_hash)
+        let call = contract.request_start_game(&board_size.into());
+        let (events, block_number) = player.send_and_wait(vec![call])
             .await
-            .map_err(|e| e.into())
             .and_then(|info| {
                 info.receipt
                     .into_events()
@@ -244,12 +232,8 @@ where
 
         if let Some((root, game_id)) = commit_info {
             let contract = self.contract();
-            let execution = contract.commit_board(&root, &game_id)
-                .gas_estimate_multiplier(5.0);
-            let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-            wait_success(self.player.provider(), result.transaction_hash)
-                .await
-                .map_err(|e| e.into())?;
+            let call = contract.commit_board(&root, &game_id);
+            self.player.send_and_wait(vec![call]).await?;
         }
 
         Ok(())
@@ -267,12 +251,8 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.attack(&game_id, &x, &y)
-            .gas_estimate_multiplier(5.0);
-        let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        wait_success(self.player.provider(), result.transaction_hash)
-            .await
-            .map_err(|e| e.into())?;
+        let call = contract.attack(&game_id, &x, &y);
+        self.player.send_and_wait(vec![call]).await?;
 
         let game_data = self.in_game_data()?;
         game_data.state = InGameState::Playing(PlayTurn {
@@ -299,12 +279,8 @@ where
         };
 
         let contract = self.contract();
-        let execution = contract.defend(&game_id, &report.contract_fire_status(salt), &report.proof)
-            .gas_estimate_multiplier(5.0);
-        let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        wait_success(self.player.provider(), result.transaction_hash)
-            .await
-            .map_err(|e| e.into())?;
+        let call = contract.defend(&game_id, &report, salt, &report.proof);
+        self.player.send_and_wait(vec![call]).await?;
 
         Ok(report)
     }
@@ -320,13 +296,8 @@ where
         };
 
         let contract = self.contract();
-        let ships = board.ships().into_iter().map(|s| s.into()).collect::<Vec<ContractShip>>();
-        let execution = contract.reveal(&game_id, &ships, &salt.into())
-            .gas_estimate_multiplier(5.0);
-        let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        let receipt_info = wait_success(self.player.provider(), result.transaction_hash)
-            .await
-            .map_err(|e| e.into())?;
+        let call = contract.reveal(&game_id, &board.ships(), &salt.into());
+        let receipt_info = self.player.send_and_wait(vec![call]).await?;
 
         let outcome = receipt_info.receipt.into_events().ok().and_then(|events| {
             events.into_iter().find_map(|e| match e {
@@ -343,11 +314,8 @@ where
         let game_id = game.game_id;
 
         let contract = self.contract();
-        let execution = contract.claim_timeout(&game_id).gas_estimate_multiplier(5.0);
-        let result: InvokeTransactionResult = execution.send().await.map_err(|e| e.into())?;
-        let receipt_info = wait_success(self.player.provider(), result.transaction_hash)
-            .await
-            .map_err(|e| e.into())?;
+        let call = contract.claim_timeout(&game_id);
+        let receipt_info = self.player.send_and_wait(vec![call]).await?;
 
         let outcome = receipt_info.receipt.into_events().ok().and_then(|events| {
             events.into_iter().find_map(|e| match e {
@@ -389,9 +357,9 @@ where
         self.state.as_in_game_mut().ok_or(GameError::GameNotStarted)
     }
 
-    fn contract(&self) -> Starkwaves<&A> {
-        Starkwaves::new(self.contract_address, &self.player)
-    }
+        fn contract(&self) -> Starkwaves {
+            Starkwaves::new(self.contract_address)
+        }
 
     async fn subscribe_for_lobby(
         ws_url: Url,
@@ -702,10 +670,7 @@ where
     }
 }
 
-impl<A> Drop for Game<A>
-where
-    A: ConnectedAccount + Sync,
-{
+impl<A: GameAccount> Drop for Game<A> {
     fn drop(&mut self) {
         if let Some(task) = self.in_game_events_task.take() {
             task.abort();

@@ -2,7 +2,6 @@ use crate::types::ShipKind;
 use derive_more::Display;
 use std::collections::HashSet;
 use starknet_rust::core::codec::Encode;
-use crate::types::contract::starkwaves;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
 pub enum BoardSize {
@@ -60,26 +59,6 @@ impl Default for BoardSize {
     }
 }
 
-impl Into<starkwaves::BoardSize> for BoardSize {
-    fn into(self) -> starkwaves::BoardSize {
-        match self {
-            BoardSize::Standard => starkwaves::BoardSize::Standard,
-            BoardSize::Smaller(smaller) => starkwaves::BoardSize::Smaller(smaller.into()),
-            BoardSize::Larger(larger) => starkwaves::BoardSize::Larger(larger.into()),
-        }
-    }
-}
-
-impl From<starkwaves::BoardSize> for BoardSize {
-    fn from(value: starkwaves::BoardSize) -> Self {
-        match value {
-            starkwaves::BoardSize::Standard => BoardSize::Standard,
-            starkwaves::BoardSize::Smaller(smaller) => BoardSize::Smaller(smaller.into()),
-            starkwaves::BoardSize::Larger(larger) => BoardSize::Larger(larger.into()),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
 pub enum SmallerBoardSize {
     #[display("6x6")]
@@ -93,24 +72,6 @@ impl SmallerBoardSize {
         match self {
             SmallerBoardSize::SixBySix => 6,
             SmallerBoardSize::EightByEight => 8
-        }
-    }
-}
-
-impl Into<starkwaves::SmallerBoardSize> for SmallerBoardSize {
-    fn into(self) -> starkwaves::SmallerBoardSize {
-        match self {
-            SmallerBoardSize::SixBySix => starkwaves::SmallerBoardSize::SixBySix,
-            SmallerBoardSize::EightByEight => starkwaves::SmallerBoardSize::EightByEight,
-        }
-    }
-}
-
-impl From<starkwaves::SmallerBoardSize> for SmallerBoardSize {
-    fn from(value: starkwaves::SmallerBoardSize) -> Self {
-        match value {
-            starkwaves::SmallerBoardSize::SixBySix => SmallerBoardSize::SixBySix,
-            starkwaves::SmallerBoardSize::EightByEight => SmallerBoardSize::EightByEight,
         }
     }
 }
@@ -131,26 +92,6 @@ impl LargerBoardSize {
             LargerBoardSize::TwelveByTwelve => 12,
             LargerBoardSize::FourteenByFourteen => 14,
             LargerBoardSize::TwentyByTwenty => 20
-        }
-    }
-}
-
-impl Into<starkwaves::LargerBoardSize> for LargerBoardSize {
-    fn into(self) -> starkwaves::LargerBoardSize {
-        match self {
-            LargerBoardSize::TwelveByTwelve => starkwaves::LargerBoardSize::TwelveByTwelve,
-            LargerBoardSize::FourteenByFourteen => starkwaves::LargerBoardSize::FourteenByFourteen,
-            LargerBoardSize::TwentyByTwenty => starkwaves::LargerBoardSize::TwentyByTwenty,
-        }
-    }
-}
-
-impl From<starkwaves::LargerBoardSize> for LargerBoardSize {
-    fn from(value: starkwaves::LargerBoardSize) -> Self {
-        match value {
-            starkwaves::LargerBoardSize::TwelveByTwelve => LargerBoardSize::TwelveByTwelve,
-            starkwaves::LargerBoardSize::FourteenByFourteen => LargerBoardSize::FourteenByFourteen,
-            starkwaves::LargerBoardSize::TwentyByTwenty => LargerBoardSize::TwentyByTwenty
         }
     }
 }

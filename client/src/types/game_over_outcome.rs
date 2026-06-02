@@ -1,4 +1,4 @@
-use crate::types::contract::starkwaves::Outcome;
+use crate::types::contract::generated::Outcome;
 use cainome::cairo_serde::ContractAddress;
 
 #[derive(Debug, Clone)]

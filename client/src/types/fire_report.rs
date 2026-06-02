@@ -1,4 +1,3 @@
-use crate::types::contract::starkwaves::FireStatus as ContractFireStatus;
 use crate::types::{Ship, ShipKind};
 use starknet_rust::core::crypto::pedersen_hash;
 use starknet_rust::core::types::Felt;
@@ -9,12 +8,6 @@ pub struct FireReport {
     pub status: FireStatus,
     pub ship_destroyed: Option<Ship>,
     pub proof: Vec<Felt>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum FireStatus {
-    Miss,
-    Hit(ShipKind),
 }
 
 impl FireReport {
@@ -41,27 +34,6 @@ impl FireReport {
             proof,
         }
     }
-
-    pub fn salted_status_value(&self, salt: u64) -> Felt {
-        let status = match &self.status {
-            FireStatus::Miss => 0,
-            FireStatus::Hit(_) => 1,
-        };
-        pedersen_hash(&Felt::from(status), &Felt::from(salt))
-    }
-
-    pub fn contract_fire_status(&self, salt: u64) -> ContractFireStatus {
-        match &self.status {
-            FireStatus::Miss => {
-                let status = self.salted_status_value(salt);
-                ContractFireStatus::Miss(status)
-            }
-            FireStatus::Hit(_) => {
-                let status = self.salted_status_value(salt);
-                ContractFireStatus::Hit((self.ship_destroyed.map(|k| k.kind.into()), status))
-            }
-        }
-    }
 }
 
 impl Display for FireReport {
@@ -79,5 +51,21 @@ impl Display for FireReport {
         }
 
         writeln!(f, "{}", report)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum FireStatus {
+    Miss,
+    Hit(ShipKind),
+}
+
+impl FireStatus {
+    pub fn salted(&self, salt: u64) -> Felt {
+        let status = match &self {
+            FireStatus::Miss => 0,
+            FireStatus::Hit(_) => 1,
+        };
+        pedersen_hash(&Felt::from(status), &Felt::from(salt))
     }
 }

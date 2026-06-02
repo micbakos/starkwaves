@@ -11,6 +11,7 @@ pub mod environment;
 pub mod contract;
 pub mod game_state;
 pub mod game_over_outcome;
+pub mod game_account;
 
 pub use board::Board;
 pub use cell::Cell;

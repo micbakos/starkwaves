@@ -56,8 +56,8 @@ fn main() {
 
     let output_dir = PathBuf::from("src/types/contract");
 
-    let output_path = output_dir.join("starkwaves.rs");
-    let abigen = Abigen::new("Starkwaves", contract.to_str().unwrap())
+    let output_path = output_dir.join("generated.rs");
+    let abigen = Abigen::new("StarkwavesGenerated", contract.to_str().unwrap())
         .with_execution_version(ExecutionVersion::V3)
         .with_derives(vec![
             "Debug".into(),

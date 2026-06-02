@@ -9,9 +9,6 @@ use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
 use std::process::exit;
 use std::sync::Arc;
-use starknet_rust::accounts::Account;
-use starkwaves_client::types::contract::starkwaves::Outcome;
-use starkwaves_client::types::game_state::InGameState;
 
 #[derive(Parser, Debug)]
 #[command(name = "starkwaves")]
