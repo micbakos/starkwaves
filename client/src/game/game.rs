@@ -1,10 +1,10 @@
+use crate::types::account::game_account::GameAccount;
 use crate::types::board_size::BoardSize;
 use crate::types::contract::generated::Event;
 use crate::types::contract::mappings::{in_game_event_keys, in_lobby_event_keys, IntoEvents};
 use crate::types::contract::starkwaves::Starkwaves;
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
-use crate::types::game_account::GameAccount;
 use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
 use crate::types::result::Result;
@@ -68,9 +68,9 @@ pub trait GameCallback: Send + Sync {
     async fn on_update(&self, update: GameUpdate);
 }
 
-pub struct Game<A: GameAccount> {
+pub struct Game {
     contract_address: Felt,
-    player: A,
+    player: Box<dyn GameAccount>,
     ws_url: Url,
     salt: u64,
     state: GameState,
@@ -79,11 +79,7 @@ pub struct Game<A: GameAccount> {
     event_processor_task: Option<JoinHandle<()>>,
 }
 
-impl<A> Game<A>
-where
-    A: GameAccount + Send + 'static,
-    A::Provider: Send + Sync,
-{
+impl Game {
     pub fn player_address(&self) -> ContractAddress {
         self.player.address().into()
     }
@@ -91,7 +87,7 @@ where
     pub async fn join(
         contract_address: Felt,
         ws_url: Url,
-        player: A,
+        player: Box<dyn GameAccount>,
         board_size: BoardSize,
         callback: Arc<dyn GameCallback>,
     ) -> Result<Arc<Mutex<Self>>> {
@@ -670,7 +666,7 @@ where
     }
 }
 
-impl<A: GameAccount> Drop for Game<A> {
+impl Drop for Game {
     fn drop(&mut self) {
         if let Some(task) = self.in_game_events_task.take() {
             task.abort();

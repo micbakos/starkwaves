@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::types::board_size::BoardSize;
 use crate::types::{Orientation, ShipKind};
 use starknet_rust::accounts::AccountError;
@@ -68,6 +69,9 @@ pub enum GameError {
     #[error("Account error: {0}")]
     AccountError(String),
 
+    #[error("Account error: {0}")]
+    CartridgeCliError(CartridgeCliError),
+
     #[error("It is not your turn to attack.")]
     CannotAttack,
 
@@ -79,6 +83,18 @@ pub enum GameError {
 
     #[error("Contract state was reset.")]
     ContractReset,
+}
+
+#[derive(Debug, ThisError)]
+pub enum CartridgeCliError {
+    #[error("Cartridge CLI failed to spawn at path: {0}")]
+    FailedToSpawnCli(PathBuf),
+    #[error("Cartridge CLI: {0}")]
+    CliError(String),
+    #[error("Cartridge CLI failed to deserialize: {0}")]
+    FailedToDeserialize(String),
+    #[error("Cartridge CLI has no active session.")]
+    NoSession
 }
 
 impl Into<GameError> for ProviderError {

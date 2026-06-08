@@ -1,19 +1,30 @@
 use async_trait::async_trait;
 use clap::Parser;
+use dotenv::dotenv;
 use log::LevelFilter;
+use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::providers::JsonRpcClient;
+use starknet_rust::signers::{LocalWallet, SigningKey};
+use starknet_rust_core::types::Felt;
+use starknet_rust_core::utils::cairo_short_string_to_felt;
 use starkwaves_client::game::game::{Game, GameCallback, GameUpdate};
+use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
+use starkwaves_client::types::account::game_account::GameAccount;
 use starkwaves_client::types::board_size::{BoardSize, SmallerBoardSize};
-use starkwaves_client::types::environment::Environment;
 use starkwaves_client::types::game_over_outcome::{GameOverOutcome, Reason};
+use starkwaves_client::types::result::Result;
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
-use std::process::exit;
+use std::path::PathBuf;
+use std::process::{exit, Command, Stdio};
 use std::sync::Arc;
+use url::Url;
 
 #[derive(Parser, Debug)]
 #[command(name = "starkwaves")]
 #[command(about = "Starkwaves battleship game client")]
-struct Args {
+pub struct Args {
     /// Player's private key (hex format, with or without 0x prefix)
     #[arg(short = 'k', long)]
     private_key: Option<String>,
@@ -21,10 +32,139 @@ struct Args {
     /// Player's account address (hex format, with or without 0x prefix)
     #[arg(short = 'a', long)]
     address: Option<String>,
+}
 
-    /// Use a hardcoded preset player: A or B
-    #[arg(short = 'p', long)]
-    preset: Option<String>,
+impl Args {
+    pub fn local_key(&self) -> Option<LocalKey> {
+        if self.private_key.is_some() && self.address.is_some() {
+            Some(LocalKey {
+                private_key: Felt::from_hex(self.private_key.clone().unwrap().as_str()).unwrap(),
+                address: Felt::from_hex(self.address.clone().unwrap().as_str()).unwrap(),
+            })
+        } else if self.address.is_none() && self.private_key.is_none() {
+            None
+        } else {
+            panic!("-a (address) and -k (private_key) should be specified together");
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PlayerPreset {
+    Local(LocalKey),
+    Cartridge(PathBuf)
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalKey {
+    pub private_key: Felt,
+    pub address: Felt,
+}
+
+#[derive(Debug, Clone)]
+pub struct Environment {
+    rpc_url: Url,
+    pub ws_url: Url,
+    chain_id: Felt,
+    pub contract_address: Felt,
+    preset: PlayerPreset,
+}
+
+impl Environment {
+    pub fn new(args: &Args) -> Self {
+        dotenv().ok();
+        let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
+        dotenv::from_filename(format!(".env.{}", preset)).ok();
+
+        let chain_id_str = env::var("CHAIN_ID").expect("Should have CHAIN_ID in .env");
+        let rpc_url_str = env::var("RPC_URL").expect("Should have RPC_URL in .env");
+        let ws_url_str = env::var("WS_URL").expect("Should have WS_URL in .env");
+
+        let contract_address_str =
+            env::var("CONTRACT_ADDR").expect("Should have CONTRACT_ADDRESS in .env.\nRun: \n\tcargo run --bin deploy");
+        let contract_address =
+            Felt::from_hex(contract_address_str.as_str()).expect("Invalid contract address");
+
+        let local_key = args.local_key();
+        let preset = match local_key {
+            None => {
+                let controller_cli_path = Self::controller_cli_path();
+                if controller_cli_path.is_none() {
+                    panic!("Cartridge controller cli should be installed if not private key and address is provided\n ↳ https://github.com/cartridge-gg/controller-cli#installation");
+                }
+
+                PlayerPreset::Cartridge(controller_cli_path.unwrap())
+            }
+            Some(local_key) => {
+                PlayerPreset::Local(local_key)
+            }
+        };
+
+        Self {
+            rpc_url: Url::parse(rpc_url_str.as_str()).expect("Invalid RPC_URL"),
+            ws_url: Url::parse(ws_url_str.as_str()).expect("Invalid WS_URL"),
+            chain_id: cairo_short_string_to_felt(chain_id_str.as_str()).expect("Invalid CHAIN_ID"),
+            contract_address,
+            preset,
+        }
+    }
+
+    fn controller_cli_path() -> Option<PathBuf> {
+        const CLI: &str = "controller";
+
+        // 1. On PATH? (`Command::new` searches PATH on unix.)
+        let on_path = Command::new(CLI)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if on_path {
+            return Some(PathBuf::from(CLI));
+        }
+
+        // 2. Custom INSTALL_DIR from install.sh, then 3. its default.
+        let candidates = [
+            env::var_os("INSTALL_DIR").map(PathBuf::from),
+            dirs::home_dir().map(|h| h.join(".local/bin")),
+        ];
+        candidates
+            .into_iter()
+            .flatten()
+            .map(|dir| dir.join(CLI))
+            .find(|p| p.exists())
+    }
+
+    pub fn rpc_provider(&self) -> JsonRpcClient<HttpTransport> {
+        JsonRpcClient::new(HttpTransport::new(self.rpc_url.to_owned()))
+    }
+
+    pub async fn player(&self, rpc: &JsonRpcClient<HttpTransport>) -> Result<Box<dyn GameAccount>> {
+        match &self.preset {
+            PlayerPreset::Local(local_key) => {
+                let signer = LocalWallet::from(SigningKey::from_secret_scalar(local_key.private_key));
+
+                Ok(Box::new(SingleOwnerAccount::new(
+                    rpc.clone(),
+                    signer,
+                    local_key.address,
+                    self.chain_id,
+                    ExecutionEncoding::New,
+                )))
+            }
+            PlayerPreset::Cartridge(cli_path) => {
+                let cartridge_account = CartridgeAccount::resolve(
+                    cli_path,
+                    self.contract_address,
+                    self.chain_id
+                ).await?;
+                
+                Ok(Box::new(cartridge_account))
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -36,16 +176,14 @@ async fn main() {
 
     let args = Args::parse();
 
-    let env = Environment::new();
+    let env = Environment::new(&args);
 
     let rpc_provider = env.rpc_provider();
 
-    let player = env.player(
-        args.preset.as_deref(),
-        args.private_key.as_deref(),
-        args.address.as_deref(),
-        &rpc_provider,
-    );
+    let player = env.player(&rpc_provider).await.unwrap_or_else(|err| {
+        eprintln!("{err}");
+        exit(-1);
+    });
 
     let print_callback = PrintCallback;
 

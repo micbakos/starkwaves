@@ -7,11 +7,11 @@ pub mod board_size;
 pub mod result;
 pub mod error;
 pub mod fire_report;
-pub mod environment;
 pub mod contract;
 pub mod game_state;
 pub mod game_over_outcome;
-pub mod game_account;
+pub mod account;
+pub mod cartridge;
 
 pub use board::Board;
 pub use cell::Cell;

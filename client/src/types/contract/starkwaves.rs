@@ -1,10 +1,10 @@
 use crate::types::board_size::BoardSize;
 use crate::types::contract::generated;
 use crate::types::fire_report::{FireReport, FireStatus};
+use crate::types::Ship;
 use cainome::cairo_serde::CairoSerde;
 use starknet_rust::macros::selector;
 use starknet_rust_core::types::{Call, Felt};
-use crate::types::Ship;
 
 pub struct Starkwaves {
     address: Felt,
