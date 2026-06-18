@@ -7,8 +7,10 @@ use starknet_rust_core::types::{Call, Felt, TransactionReceiptWithBlockInfo};
 use crate::types::account::game_account::GameAccount;
 use crate::utils::wait_success;
 
+pub type LocalAccount = SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>; 
+
 #[async_trait]
-impl GameAccount for SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet> {
+impl GameAccount for LocalAccount {
     fn address(&self) -> Felt {
         Account::address(&self)
     }
