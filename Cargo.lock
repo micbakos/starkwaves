@@ -5606,6 +5606,7 @@ dependencies = [
  "async-trait",
  "color-eyre",
  "crossterm",
+ "derive_more",
  "enum-as-inner",
  "log",
  "ratatui",

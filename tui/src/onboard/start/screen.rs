@@ -8,6 +8,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use strum::{EnumCount, FromRepr, VariantArray};
+use tokio::sync::mpsc::UnboundedSender;
 
 pub struct StartScreen;
 
@@ -24,7 +25,7 @@ impl Default for Menu {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
-    pub selected_button: Menu,
+    selected_button: Menu,
 }
 
 impl State {
@@ -61,22 +62,25 @@ impl Screen for StartScreen {
     type Effect = Effect;
     type State = State;
 
-    fn reduce(state: &Self::State, intent: Self::Intent, core: &CoreState) -> (Self::State, Vec<Self::Effect>) {
+    fn reduce(state: &Self::State, intent: Self::Intent, core: &CoreState) -> (Self::State, Vec<crate::types::effect::Effect>) {
         let mut new_state = state.clone();
+        let mut effects: Vec<crate::types::effect::Effect> = vec![];
         match intent {
             Intent::OnPressDown => new_state.press_down(),
             Intent::OnPressUp => new_state.press_up(),
             Intent::OnSelect => {
                 match state.selected_button {
-                    Menu::Start => {}
-                    Menu::Quit => {
+                    Menu::Start => {
 
+                    }
+                    Menu::Quit => {
+                        effects.push(crate::app::screen::Effect::RequestQuit.into())
                     }
                 }
             }
         };
 
-        (new_state, Vec::new())
+        (new_state, effects)
     }
 
     fn render(state: &Self::State, core: &CoreState, frame: &mut Frame, area: Rect) {
@@ -119,7 +123,7 @@ impl Screen for StartScreen {
         }
     }
 
-    async fn run(effect: Self::Effect) -> Self::Intent {
-        todo!()
+    async fn run(effect: Self::Effect, intents: UnboundedSender<crate::types::intent::Intent>) {
+
     }
 }

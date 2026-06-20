@@ -15,6 +15,7 @@ use ratatui::prelude::Direction;
 use ratatui::{DefaultTerminal, Frame};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, watch};
+use crate::onboard::start;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -46,13 +47,17 @@ async fn run(mut terminal: DefaultTerminal) -> Result<()> {
 
     tokio::spawn(async move {
         while let Some(effects) = effects_receiver.recv().await {
-
+            for effect in effects {
+                let intent_sender = intent_sender.clone();
+                tokio::spawn(run_effect(effect, intent_sender));
+            }
         }
     });
 
     // Observe intents and reduce them to new state or effects
     while let Some(intent) =intent_receiver.recv().await {
         let (new_state, effects) = reduce(&state_receiver.borrow().clone(), intent);
+        let running = new_state.core.running;
 
         state_sender.send_if_modified(|state| {
             if *state != new_state {
@@ -63,8 +68,12 @@ async fn run(mut terminal: DefaultTerminal) -> Result<()> {
             }
         });
 
+        if !running {
+            break;
+        }
+
         if !effects.is_empty() {
-            effects_sender.send(effects).unwrap();
+            effects_sender.send(effects)?;
         }
     }
 
@@ -74,9 +83,7 @@ async fn run(mut terminal: DefaultTerminal) -> Result<()> {
 fn reduce(state: &State, intent: Intent) -> (State, Vec<Effect>) {
     match intent {
         Intent::App(intent) => {
-            let (state, effects) = app::screen::reduce(state, intent);
-
-            (state, effects.into_iter().map(|e| Effect::App(e)).collect())
+            app::screen::AppScreen::reduce(state, intent, &state.core)
         },
         Intent::Start(intent) => {
             // TODO: Boilerplate
@@ -94,7 +101,7 @@ fn reduce(state: &State, intent: Intent) -> (State, Vec<Effect>) {
 
             state.screens[0] = ScreenState::Start(screen_state);
 
-            (state, effects.into_iter().map(|e| Effect::Start(e)).collect())
+            (state, effects)
         }
     }
 }
@@ -127,8 +134,12 @@ fn render(state: &State, frame: &mut Frame) {
 
 async fn run_effect(effect: Effect, intent_sender: UnboundedSender<Intent>) {
     match effect {
-        Effect::App(_) => {}
-        Effect::Start(_) => {}
+        Effect::App(effect) => {
+            app::screen::AppScreen::run(effect, intent_sender).await;
+        }
+        Effect::Start(effect) => {
+            start::screen::StartScreen::run(effect, intent_sender).await;
+        }
     }
 }
 
