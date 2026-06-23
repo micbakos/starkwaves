@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use starknet_rust_core::types::Felt;
 use std::fmt;
 use std::str::FromStr;
@@ -79,8 +79,6 @@ impl<'de> Deserialize<'de> for ContractPolicyMethod {
         s.parse().map_err(serde::de::Error::custom)
     }
 }
-
-
 
 #[derive(Clone, Serialize)]
 pub struct PolicyMethod {

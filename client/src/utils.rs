@@ -1,6 +1,8 @@
 use crate::types::error::GameError;
 use crate::types::result::Result;
-use starknet_rust::core::types::{ExecutionResult, Felt, StarknetError, TransactionReceiptWithBlockInfo};
+use starknet_rust::core::types::{
+    ExecutionResult, Felt, StarknetError, TransactionReceiptWithBlockInfo,
+};
 use starknet_rust::providers::{Provider, ProviderError};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -18,17 +20,15 @@ pub async fn wait_success<P: Provider>(
                 if let ExecutionResult::Reverted { reason } = receipt.receipt.execution_result() {
                     return Err(GameError::TxReverted {
                         tx_hash: tx_hash.to_fixed_hex_string(),
-                        reason: reason.to_string()
+                        reason: reason.to_string(),
                     });
                 }
                 return Ok(receipt);
-            },
+            }
             Err(ProviderError::StarknetError(StarknetError::TransactionHashNotFound)) => {
                 sleep(WAIT_SUCCESS_POLL_INTERVAL).await;
             }
-            Err(e) => {
-                return Err(e.into())
-            },
+            Err(e) => return Err(e.into()),
         }
     }
 

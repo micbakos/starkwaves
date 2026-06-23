@@ -1,6 +1,6 @@
+use crate::types::error::GameError;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use crate::types::error::GameError;
 
 /// Represents the orientation of a ship
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ impl TryFrom<&str> for Orientation {
             _ => Err(GameError::InvalidInput {
                 expected: "h|v".to_string(),
                 received: value.to_string(),
-            })
+            }),
         }
     }
 }

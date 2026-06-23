@@ -5,8 +5,8 @@ use crate::types::error::{CartridgeCliError, GameError};
 use crate::types::result::Result;
 use crate::utils::wait_success;
 use async_trait::async_trait;
-use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust::providers::JsonRpcClient;
+use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust_core::chain_id;
 use starknet_rust_core::types::{Call, Felt, TransactionReceiptWithBlockInfo};
 use std::collections::HashSet;
@@ -58,9 +58,7 @@ pub struct CartridgeAccount {
     username: String,
 }
 
-
 impl CartridgeAccount {
-
     pub async fn resolve(
         controller_path: impl Into<PathBuf>,
         contract_address: Felt,
@@ -87,7 +85,7 @@ impl CartridgeAccount {
                 let status = cli.status().await?;
                 status.address
             }
-            Err(error) => return Err(error)
+            Err(error) => return Err(error),
         };
 
         let username = cli.username().await?;
@@ -95,7 +93,7 @@ impl CartridgeAccount {
             cli,
             address: player_address,
             chain_id,
-            username
+            username,
         })
     }
 

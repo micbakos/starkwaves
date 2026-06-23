@@ -12,12 +12,10 @@ impl Cell {
     pub fn ship(&self, ships: &Vec<Ship>) -> Option<Ship> {
         match self {
             Cell::Water => None,
-            Cell::Ship(id) => {
-                ships.into_iter().find(|ship| ship.id == *id).cloned()
-            }
+            Cell::Ship(id) => ships.into_iter().find(|ship| ship.id == *id).cloned(),
         }
     }
-    
+
     #[cfg(test)]
     pub fn assert_kind(&self, ships: &Vec<Ship>, kind: crate::types::ShipKind) {
         let ship = self.ship(ships).expect("Should be a ship");

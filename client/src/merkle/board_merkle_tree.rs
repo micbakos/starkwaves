@@ -37,9 +37,11 @@ impl BoardMerkleTree {
         let tree = self.as_tree();
         let proof = tree.proof(vec![offset].as_slice());
 
-        proof.to_bytes().chunks(32).map(|c| {
-            Felt::from_bytes_be_slice(c)
-        }).collect()
+        proof
+            .to_bytes()
+            .chunks(32)
+            .map(|c| Felt::from_bytes_be_slice(c))
+            .collect()
     }
 }
 
@@ -55,16 +57,26 @@ mod tests {
 
         let commit_result = board.commit(1234);
 
-        assert!(commit_result.is_err(), "Empty board should not be ready for commitment");
+        assert!(
+            commit_result.is_err(),
+            "Empty board should not be ready for commitment"
+        );
     }
 
     #[test]
     fn test_same_board_same_salt_produces_same_commitment() {
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let mut board2 = board.clone();
@@ -73,16 +85,26 @@ mod tests {
         let root1 = board.commit(salt).unwrap();
         let root2 = board2.commit(salt).unwrap();
 
-        assert_eq!(root1, root2, "Same board and salt should produce same commitment");
+        assert_eq!(
+            root1, root2,
+            "Same board and salt should produce same commitment"
+        );
     }
 
     #[test]
     fn test_different_salt_produces_different_commitment() {
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
         // Complete board: needs 1 Destroyer + 1 Cruiser for 6x6
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let mut board2 = board.clone();
@@ -90,30 +112,50 @@ mod tests {
         let root1 = board.commit(0).unwrap();
         let root2 = board2.commit(1).unwrap();
 
-        assert_ne!(root1, root2, "Different salts should produce different commitments");
+        assert_ne!(
+            root1, root2,
+            "Different salts should produce different commitments"
+        );
     }
 
     #[test]
     fn test_different_boards_produce_different_commitments() {
         // Board 1: Complete board with ships at position 1
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Board 2: Complete board with ships at position 2
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 1, 1, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 1, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 3, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                3,
+                3,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
 
         let salt = 12345u64;
         let root1 = board1.commit(salt).unwrap();
         let root2 = board2.commit(salt).unwrap();
 
-        assert_ne!(root1, root2, "Different boards should produce different commitments");
+        assert_ne!(
+            root1, root2,
+            "Different boards should produce different commitments"
+        );
     }
 
     #[test]
@@ -122,22 +164,39 @@ mod tests {
 
         // Board 1: Complete board with ships at position 1
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Board 2: Complete board with ships at position 2
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 3, 3, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                3,
+                3,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 0, 4, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         let root1 = board1.commit(salt).unwrap();
         let root2 = board2.commit(salt).unwrap();
 
-        assert_ne!(root1, root2, "Different ship positions should produce different commitments");
+        assert_ne!(
+            root1, root2,
+            "Different ship positions should produce different commitments"
+        );
     }
 
     #[test]
@@ -146,22 +205,39 @@ mod tests {
 
         // Board 1: Complete board with Cruiser horizontal
         let mut board1 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board1.place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Horizontal))
             .expect("Ship placement should succeed");
-        board1.place_ship(Ship::new(ShipKind::Destroyer, 2, 0, Orientation::Horizontal))
+        board1
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                2,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
 
         // Board 2: Complete board with Cruiser vertical
         let mut board2 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board2.place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Vertical))
+        board2
+            .place_ship(Ship::new(ShipKind::Cruiser, 0, 0, Orientation::Vertical))
             .expect("Ship placement should succeed");
-        board2.place_ship(Ship::new(ShipKind::Destroyer, 0, 3, Orientation::Horizontal))
+        board2
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                3,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
 
         let root1 = board1.commit(salt).unwrap();
         let root2 = board2.commit(salt).unwrap();
 
-        assert_ne!(root1, root2, "Different ship orientations should produce different commitments");
+        assert_ne!(
+            root1, root2,
+            "Different ship orientations should produce different commitments"
+        );
     }
 
     #[test]
@@ -169,15 +245,26 @@ mod tests {
         let salt = 12345u64;
 
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Destroyer placement should succeed");
-        board.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Cruiser placement should succeed");
 
         let mut copied_board = board.clone();
 
         let root1 = board.commit(salt).unwrap();
-        assert_ne!(root1, Felt::ZERO, "Root with multiple ships should not be zero");
+        assert_ne!(
+            root1,
+            Felt::ZERO,
+            "Root with multiple ships should not be zero"
+        );
 
         // Verify determinism
         let root2 = copied_board.commit(salt).unwrap();
@@ -190,21 +277,38 @@ mod tests {
 
         // Complete 6x6 board
         let mut board6x6 = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
-        board6x6.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board6x6
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board6x6.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board6x6
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
         // Complete 8x8 board
         let mut board8x8 = Board::new(BoardSize::Smaller(SmallerBoardSize::EightByEight));
-        board8x8.place_ship(Ship::new(ShipKind::Destroyer, 0, 0, Orientation::Horizontal))
+        board8x8
+            .place_ship(Ship::new(
+                ShipKind::Destroyer,
+                0,
+                0,
+                Orientation::Horizontal,
+            ))
             .expect("Ship placement should succeed");
-        board8x8.place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
+        board8x8
+            .place_ship(Ship::new(ShipKind::Cruiser, 2, 1, Orientation::Vertical))
             .expect("Ship placement should succeed");
 
-        let root6x6  = board6x6.commit(salt).unwrap();
+        let root6x6 = board6x6.commit(salt).unwrap();
         let root8x8 = board8x8.commit(salt).unwrap();
 
-        assert_ne!(root6x6, root8x8, "Different board sizes should produce different commitments");
+        assert_ne!(
+            root6x6, root8x8,
+            "Different board sizes should produce different commitments"
+        );
     }
 }

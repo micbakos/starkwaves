@@ -1,7 +1,7 @@
 #[path = "common.rs"]
 mod common;
 
-use common::{check_sncast, wait_for_tx, Config, CONTRACT_PATH};
+use common::{CONTRACT_PATH, Config, check_sncast, wait_for_tx};
 use log::error;
 use starknet_rust::accounts::{Account, ConnectedAccount, SingleOwnerAccount};
 use starknet_rust::core::types::{BlockId, BlockTag, Call, Felt, FunctionCall};

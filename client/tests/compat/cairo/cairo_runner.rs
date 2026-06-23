@@ -1,11 +1,11 @@
-use std::path::Path;
+use crate::compat::cairo::cairo_value::CairoValue;
 use crate::compat::cairo::panic_result::{CairoError, CairoResult};
 use cairo_lang_sierra::program::Program;
+use cairo_native::Value;
 use cairo_native::context::NativeContext;
 use cairo_native::executor::JitNativeExecutor;
 use cairo_native::utils::find_function_id;
-use cairo_native::Value;
-use crate::compat::cairo::cairo_value::CairoValue;
+use std::path::Path;
 
 pub struct CairoRunner {
     executor: JitNativeExecutor<'static>,
@@ -15,8 +15,8 @@ pub struct CairoRunner {
 impl CairoRunner {
     /// Create a new prover by loading and compiling the Sierra program
     pub fn new(program_path: &Path) -> Self {
-        let sierra_json = std::fs::read_to_string(program_path)
-            .expect("Unable to read sierra program file");
+        let sierra_json =
+            std::fs::read_to_string(program_path).expect("Unable to read sierra program file");
 
         let program = serde_json::from_str::<Program>(&sierra_json)
             .expect("Unable to parse sierra program file");
@@ -40,11 +40,7 @@ impl CairoRunner {
         }
     }
 
-    pub fn execute_cairo_fn(
-        &self,
-        selector: &str,
-        args: Vec<Value>
-    ) -> CairoResult {
+    pub fn execute_cairo_fn(&self, selector: &str, args: Vec<Value>) -> CairoResult {
         let function_id = find_function_id(&self.sierra_program, selector)
             .expect(format!("Could not find function {}", selector).as_str());
 

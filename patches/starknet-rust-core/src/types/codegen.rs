@@ -1520,7 +1520,7 @@ pub struct L1HandlerTransaction {
     pub transaction_hash: Felt,
     /// Version of the transaction scheme
     pub version: Felt,
-    /// The L1->L2 message nonce field of the sn core L1 contract at the time the transaction was
+    /// The L1->L2 message nonce field of the sn app L1 contract at the time the transaction was
     /// sent
     pub nonce: u64,
     /// Contract address
@@ -1538,7 +1538,7 @@ pub struct L1HandlerTransaction {
 pub struct L1HandlerTransactionContent {
     /// Version of the transaction scheme
     pub version: Felt,
-    /// The L1->L2 message nonce field of the sn core L1 contract at the time the transaction was
+    /// The L1->L2 message nonce field of the sn app L1 contract at the time the transaction was
     /// sent
     pub nonce: u64,
     /// Contract address
@@ -1554,7 +1554,7 @@ pub struct L1HandlerTransactionContent {
 /// Receipt for L1 handler transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct L1HandlerTransactionReceipt {
-    /// The message hash as it appears on the L1 core contract
+    /// The message hash as it appears on the L1 app contract
     pub message_hash: Hash256,
     /// The hash identifying the transaction
     pub transaction_hash: Felt,

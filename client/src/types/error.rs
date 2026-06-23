@@ -1,9 +1,9 @@
-use std::path::PathBuf;
 use crate::types::board_size::BoardSize;
 use crate::types::{Orientation, ShipKind};
 use starknet_rust::accounts::AccountError;
 use starknet_rust::core::types::{ContractExecutionError, StarknetError};
 use starknet_rust::providers::ProviderError;
+use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
 pub use starknet_rust::core::codec::Error as CodecError;
@@ -15,7 +15,12 @@ pub enum GameError {
     ShipIneligible { ship: ShipKind, size: BoardSize },
 
     #[error("Placing a {ship} in ({x}, {y}) in {orientation} results in out of bounds.")]
-    InvalidShipPlacementBounds { ship: ShipKind, x: u8, y: u8, orientation: Orientation },
+    InvalidShipPlacementBounds {
+        ship: ShipKind,
+        x: u8,
+        y: u8,
+        orientation: Orientation,
+    },
 
     #[error("Placing a {ship} in ({x}, {y}) in {orientation} collides in ({xc}, {yc})")]
     InvalidShipPlacementCollides {
@@ -52,10 +57,7 @@ pub enum GameError {
     PlayerInGame,
 
     #[error("Transaction {tx_hash} was reverted due to: {reason}")]
-    TxReverted {
-        tx_hash: String,
-        reason: String
-    },
+    TxReverted { tx_hash: String, reason: String },
 
     #[error("{0}")]
     InvalidState(String),
@@ -76,10 +78,7 @@ pub enum GameError {
     CannotAttack,
 
     #[error("Invalid input. Expected {expected} but received {received}.")]
-    InvalidInput {
-        expected: String,
-        received: String
-    },
+    InvalidInput { expected: String, received: String },
 
     #[error("Contract state was reset.")]
     ContractReset,
@@ -94,14 +93,14 @@ pub enum CartridgeCliError {
     #[error("Cartridge CLI failed to deserialize: {0}")]
     FailedToDeserialize(String),
     #[error("Cartridge CLI has no active session.")]
-    NoSession
+    NoSession,
 }
 
 impl Into<GameError> for ProviderError {
     fn into(self) -> GameError {
         match self {
             ProviderError::StarknetError(error) => error.into(),
-            _ => GameError::StarknetProviderError(self)
+            _ => GameError::StarknetProviderError(self),
         }
     }
 }
@@ -111,15 +110,16 @@ impl Into<GameError> for StarknetError {
         match self.clone() {
             StarknetError::TransactionExecutionError(tx_execution_error) => {
                 tx_execution_error.execution_error.try_into().unwrap_or(
-                    GameError::StarknetProviderError(ProviderError::StarknetError(self))
-                )
-            },
-            StarknetError::ContractError(contract_error) => {
-                contract_error.revert_error.try_into().unwrap_or(
-                    GameError::StarknetProviderError(ProviderError::StarknetError(self))
+                    GameError::StarknetProviderError(ProviderError::StarknetError(self)),
                 )
             }
-            _ => GameError::StarknetProviderError(ProviderError::StarknetError(self))
+            StarknetError::ContractError(contract_error) => contract_error
+                .revert_error
+                .try_into()
+                .unwrap_or(GameError::StarknetProviderError(
+                    ProviderError::StarknetError(self),
+                )),
+            _ => GameError::StarknetProviderError(ProviderError::StarknetError(self)),
         }
     }
 }
@@ -133,12 +133,10 @@ impl TryInto<GameError> for ContractExecutionError {
                 let s = inner.error.as_ref();
                 s.clone().try_into()
             }
-            ContractExecutionError::Message(message) => {
-                match message.as_str() {
-                    s if s.contains("is already in another game.") => Ok(GameError::PlayerInGame),
-                    _ => Err(())
-                }
-            }
+            ContractExecutionError::Message(message) => match message.as_str() {
+                s if s.contains("is already in another game.") => Ok(GameError::PlayerInGame),
+                _ => Err(()),
+            },
         }
     }
 }
@@ -149,11 +147,9 @@ where
 {
     fn into(self) -> GameError {
         match self {
-            AccountError::Signing(error) => {
-                GameError::AccountError(format!("{:?}", error))
-            }
+            AccountError::Signing(error) => GameError::AccountError(format!("{:?}", error)),
             AccountError::Provider(error) => error.into(),
-            _ => GameError::AccountError(format!("{:?}", self))
+            _ => GameError::AccountError(format!("{:?}", self)),
         }
     }
 }

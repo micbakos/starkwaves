@@ -3,7 +3,9 @@
 use dotenv::dotenv;
 use serde_json::Value;
 use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
-use starknet_rust::core::types::{Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo};
+use starknet_rust::core::types::{
+    Felt, TransactionFinalityStatus, TransactionReceiptWithBlockInfo,
+};
 use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust::providers::{JsonRpcClient, Provider};
 use starknet_rust::signers::{LocalWallet, SigningKey};
@@ -60,7 +62,10 @@ impl Config {
 
         println!("============================== Config ==============================");
         println!("Preset: {}", preset);
-        println!("Backend: {}", if use_sncast { "sncast" } else { "starknet-rs" });
+        println!(
+            "Backend: {}",
+            if use_sncast { "sncast" } else { "starknet-rs" }
+        );
         println!("Account: {:#}", account_address);
         if let Some(contract_address) = contract_address.clone() {
             println!("Starkwaves: {:#}", contract_address);
@@ -85,10 +90,12 @@ impl Config {
         let build_type = if is_release { "release" } else { "dev" };
 
         let directory = PathBuf::from(CONTRACT_PATH).join("target").join(build_type);
-        let sierra_file_path = directory
-            .join(format!("{}.{}", CONTRACT_FILE_NAME, SIERRA_CONTRACT_SUFFIX));
-        let compiled_file_path = directory
-            .join(format!("{}.{}", CONTRACT_FILE_NAME, COMPILED_CONTRACT_SUFFIX));
+        let sierra_file_path =
+            directory.join(format!("{}.{}", CONTRACT_FILE_NAME, SIERRA_CONTRACT_SUFFIX));
+        let compiled_file_path = directory.join(format!(
+            "{}.{}",
+            CONTRACT_FILE_NAME, COMPILED_CONTRACT_SUFFIX
+        ));
 
         println!("Sierra file: {}", sierra_file_path.to_string_lossy());
         println!("CASM file: {}", compiled_file_path.to_string_lossy());
@@ -208,13 +215,11 @@ pub async fn wait_for_tx(
 ) -> Result<TransactionReceiptWithBlockInfo, Box<dyn std::error::Error>> {
     loop {
         match provider.get_transaction_receipt(tx_hash).await {
-            Ok(receipt) => {
-                match receipt.receipt.finality_status() {
-                    TransactionFinalityStatus::AcceptedOnL2
-                    | TransactionFinalityStatus::AcceptedOnL1 => return Ok(receipt),
-                    _ => {}
-                }
-            }
+            Ok(receipt) => match receipt.receipt.finality_status() {
+                TransactionFinalityStatus::AcceptedOnL2
+                | TransactionFinalityStatus::AcceptedOnL1 => return Ok(receipt),
+                _ => {}
+            },
             Err(_) => {}
         }
         sleep(Duration::from_millis(500)).await;

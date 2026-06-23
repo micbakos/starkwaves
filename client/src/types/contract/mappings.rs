@@ -1,3 +1,5 @@
+use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+use crate::types::contract::generated;
 use crate::types::contract::generated::{
     Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind,
 };
@@ -6,8 +8,6 @@ use crate::types::{Orientation, Ship, ShipKind};
 use starknet_rust::core::types::TransactionReceipt;
 use starknet_rust::core::types::{Event as StarknetEvent, Felt};
 use starknet_rust::macros::selector;
-use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
-use crate::types::contract::generated;
 
 pub trait IntoEvents {
     fn into_events(self) -> Result<Vec<Event>, GameError>;
@@ -130,18 +130,13 @@ impl From<generated::LargerBoardSize> for LargerBoardSize {
         match value {
             generated::LargerBoardSize::TwelveByTwelve => LargerBoardSize::TwelveByTwelve,
             generated::LargerBoardSize::FourteenByFourteen => LargerBoardSize::FourteenByFourteen,
-            generated::LargerBoardSize::TwentyByTwenty => LargerBoardSize::TwentyByTwenty
+            generated::LargerBoardSize::TwentyByTwenty => LargerBoardSize::TwentyByTwenty,
         }
     }
 }
 
 pub fn in_lobby_event_keys() -> Vec<Vec<Felt>> {
-    vec![
-        vec![
-            selector!("PlayersAssembled"),
-            selector!("Reset"),
-        ],
-    ]
+    vec![vec![selector!("PlayersAssembled"), selector!("Reset")]]
 }
 
 pub fn in_game_event_keys(game_id: Felt) -> Vec<Vec<Felt>> {

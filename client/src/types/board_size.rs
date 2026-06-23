@@ -1,7 +1,7 @@
 use crate::types::ShipKind;
 use derive_more::Display;
-use std::collections::HashSet;
 use starknet_rust::core::codec::Encode;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
 pub enum BoardSize {
@@ -27,19 +27,32 @@ impl BoardSize {
 
     pub fn eligible_ship_kinds(&self) -> HashSet<ShipKind> {
         match self {
-            BoardSize::Standard => ShipKind::all().difference(
-                &HashSet::from([ShipKind::SuperCarrier])
-            ).cloned().collect(),
+            BoardSize::Standard => ShipKind::all()
+                .difference(&HashSet::from([ShipKind::SuperCarrier]))
+                .cloned()
+                .collect(),
             BoardSize::Smaller(_) => HashSet::from([ShipKind::Cruiser, ShipKind::Destroyer]),
-            BoardSize::Larger(_) => ShipKind::all()
+            BoardSize::Larger(_) => ShipKind::all(),
         }
     }
 
     pub fn ship_kinds_count(&self, ship_kind: &ShipKind) -> usize {
         let eligible = self.eligible_ship_kinds();
         match self {
-            BoardSize::Standard => if eligible.contains(ship_kind) { 1 } else { 0 },
-            BoardSize::Smaller(_) => if eligible.contains(ship_kind) { 1 } else { 0 },
+            BoardSize::Standard => {
+                if eligible.contains(ship_kind) {
+                    1
+                } else {
+                    0
+                }
+            }
+            BoardSize::Smaller(_) => {
+                if eligible.contains(ship_kind) {
+                    1
+                } else {
+                    0
+                }
+            }
             BoardSize::Larger(_) => {
                 if ship_kind == &ShipKind::Destroyer || ship_kind == &ShipKind::Submarine {
                     2
@@ -71,7 +84,7 @@ impl SmallerBoardSize {
     pub fn size(&self) -> u8 {
         match self {
             SmallerBoardSize::SixBySix => 6,
-            SmallerBoardSize::EightByEight => 8
+            SmallerBoardSize::EightByEight => 8,
         }
     }
 }
@@ -91,7 +104,7 @@ impl LargerBoardSize {
         match self {
             LargerBoardSize::TwelveByTwelve => 12,
             LargerBoardSize::FourteenByFourteen => 14,
-            LargerBoardSize::TwentyByTwenty => 20
+            LargerBoardSize::TwentyByTwenty => 20,
         }
     }
 }
@@ -186,7 +199,11 @@ mod tests {
         let board = BoardSize::Larger(LargerBoardSize::TwelveByTwelve);
         let eligible = board.eligible_ship_kinds();
 
-        assert_eq!(eligible.len(), 6, "All ships should be eligible on larger boards");
+        assert_eq!(
+            eligible.len(),
+            6,
+            "All ships should be eligible on larger boards"
+        );
         assert!(eligible.contains(&ShipKind::SuperCarrier));
         assert!(eligible.contains(&ShipKind::Carrier));
         assert!(eligible.contains(&ShipKind::Battleship));
@@ -206,7 +223,8 @@ mod tests {
         assert_eq!(board.ship_kinds_count(&ShipKind::Submarine), 1);
         assert_eq!(board.ship_kinds_count(&ShipKind::Destroyer), 1);
         assert_eq!(
-            board.ship_kinds_count(&ShipKind::SuperCarrier), 0,
+            board.ship_kinds_count(&ShipKind::SuperCarrier),
+            0,
             "SuperCarrier not allowed on Standard board"
         );
     }
@@ -274,15 +292,24 @@ mod tests {
 
     #[test]
     fn test_larger_board_equality() {
-        assert_eq!(LargerBoardSize::TwelveByTwelve, LargerBoardSize::TwelveByTwelve);
-        assert_ne!(LargerBoardSize::TwelveByTwelve, LargerBoardSize::FourteenByFourteen);
+        assert_eq!(
+            LargerBoardSize::TwelveByTwelve,
+            LargerBoardSize::TwelveByTwelve
+        );
+        assert_ne!(
+            LargerBoardSize::TwelveByTwelve,
+            LargerBoardSize::FourteenByFourteen
+        );
     }
 
     // BoardSize equality and copy tests
     #[test]
     fn test_board_size_equality() {
         assert_eq!(BoardSize::Standard, BoardSize::Standard);
-        assert_ne!(BoardSize::Standard, BoardSize::Smaller(SmallerBoardSize::SixBySix));
+        assert_ne!(
+            BoardSize::Standard,
+            BoardSize::Smaller(SmallerBoardSize::SixBySix)
+        );
 
         assert_eq!(
             BoardSize::Smaller(SmallerBoardSize::SixBySix),

@@ -3,7 +3,10 @@ use super::result::Result;
 use super::ship::Ship;
 use crate::merkle::board_merkle_tree::BoardMerkleTree;
 use crate::types::board_size::BoardSize;
-use crate::types::error::GameError::{AllShipsAlreadyPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver, InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind};
+use crate::types::error::GameError::{
+    AllShipsAlreadyPlaced, BoardAlreadyCommitted, BoardNotReady, BombedAlready, GameOver,
+    InvalidShipPlacementBounds, InvalidShipPlacementCollides, InvalidShipPlacementKind,
+};
 use crate::types::fire_report::FireReport;
 use crate::types::{Cell, ShipKind};
 use starknet_rust::core::types::Felt;
@@ -126,10 +129,7 @@ impl Board {
 
         let mut array = Vec::<bool>::new();
         for cell in self.cells() {
-            let is_ship = cell
-                .ship(&self.ships)
-                .map(|_| true)
-                .unwrap_or(false);
+            let is_ship = cell.ship(&self.ships).map(|_| true).unwrap_or(false);
 
             array.push(is_ship);
         }
@@ -153,10 +153,19 @@ impl Board {
 
         let hits = self.hit_ships();
 
-        let destroyed = hits.clone().into_iter().filter(|(id, hits)| {
-            let ship = self.ships.iter().find(|s| s.id == *id).expect("Ship should exist");
-            ship.kind.length() == *hits
-        }).map(|(id, _)| { id }).collect::<HashSet<_>>();
+        let destroyed = hits
+            .clone()
+            .into_iter()
+            .filter(|(id, hits)| {
+                let ship = self
+                    .ships
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .expect("Ship should exist");
+                ship.kind.length() == *hits
+            })
+            .map(|(id, _)| id)
+            .collect::<HashSet<_>>();
 
         let all_ships = self.ships.iter().map(|s| s.id).collect::<HashSet<_>>();
         if destroyed.symmetric_difference(&all_ships).count() == 0 {
@@ -224,10 +233,7 @@ impl Board {
 
         let mut result = Vec::<bool>::new();
         for cell in self.cells() {
-            let is_ship = cell
-                .ship(&self.ships)
-                .map(|_| true)
-                .unwrap_or(false);
+            let is_ship = cell.ship(&self.ships).map(|_| true).unwrap_or(false);
 
             result.push(is_ship);
         }
@@ -292,7 +298,13 @@ impl Default for Board {
     }
 }
 
-fn format_board_row(size: usize, items: &[&str], index: Option<usize>, hits: &[bool], misses: &[bool]) -> String {
+fn format_board_row(
+    size: usize,
+    items: &[&str],
+    index: Option<usize>,
+    hits: &[bool],
+    misses: &[bool],
+) -> String {
     let sanitize = |text: &str| {
         if text.len() != 2 && text.len() != 4 {
             panic!("Each text on grid should be 2 or 4 chars. Was `{}`.", text);
@@ -342,17 +354,35 @@ fn write_board_grid(
 ) -> fmt::Result {
     let divider_items = (0..size).map(|_| "----").collect::<Vec<_>>();
     let column_titles = (0..size)
-        .map(|i| if i < 10 { format!("0{i}") } else { format!("{i}") })
+        .map(|i| {
+            if i < 10 {
+                format!("0{i}")
+            } else {
+                format!("{i}")
+            }
+        })
         .collect::<Vec<_>>();
 
-    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[], &[]))?;
-    writeln!(f, "{}", format_board_row(
-        size,
-        column_titles.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
-        None,
-        &[],
-        &[],
-    ))?;
+    writeln!(
+        f,
+        "{}",
+        format_board_row(size, divider_items.as_slice(), None, &[], &[])
+    )?;
+    writeln!(
+        f,
+        "{}",
+        format_board_row(
+            size,
+            column_titles
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            None,
+            &[],
+            &[],
+        )
+    )?;
 
     for (row_idx, row_cells) in rows.iter().enumerate() {
         let hit_cols: Vec<bool> = (0..size)
@@ -362,16 +392,28 @@ fn write_board_grid(
             .map(|col| misses.contains(&(row_idx * size + col)))
             .collect();
 
-        writeln!(f, "{}", format_board_row(
-            size,
-            row_cells.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
-            Some(row_idx),
-            &hit_cols,
-            &miss_cols,
-        ))?;
+        writeln!(
+            f,
+            "{}",
+            format_board_row(
+                size,
+                row_cells
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                Some(row_idx),
+                &hit_cols,
+                &miss_cols,
+            )
+        )?;
     }
 
-    writeln!(f, "{}", format_board_row(size, divider_items.as_slice(), None, &[], &[]))?;
+    writeln!(
+        f,
+        "{}",
+        format_board_row(size, divider_items.as_slice(), None, &[], &[])
+    )?;
     Ok(())
 }
 
@@ -380,11 +422,15 @@ impl fmt::Display for Board {
         let size = self.size.size() as usize;
         let cells = self.cells();
 
-        let ship_hits: Vec<usize> = self.received_fire.iter()
+        let ship_hits: Vec<usize> = self
+            .received_fire
+            .iter()
             .filter(|&&offset| matches!(cells[offset], Cell::Ship(_)))
             .copied()
             .collect();
-        let water_hits: Vec<usize> = self.received_fire.iter()
+        let water_hits: Vec<usize> = self
+            .received_fire
+            .iter()
             .filter(|&&offset| matches!(cells[offset], Cell::Water))
             .copied()
             .collect();
@@ -393,22 +439,33 @@ impl fmt::Display for Board {
             .chunks(size)
             .enumerate()
             .map(|(row_idx, chunk)| {
-                chunk.iter().enumerate().map(|(col_idx, cell)| {
-                    let offset = row_idx * size + col_idx;
-                    match cell {
-                        Cell::Water => {
-                            if water_hits.contains(&offset) { "**".to_string() } else { "~~".to_string() }
+                chunk
+                    .iter()
+                    .enumerate()
+                    .map(|(col_idx, cell)| {
+                        let offset = row_idx * size + col_idx;
+                        match cell {
+                            Cell::Water => {
+                                if water_hits.contains(&offset) {
+                                    "**".to_string()
+                                } else {
+                                    "~~".to_string()
+                                }
+                            }
+                            Cell::Ship(ship_id) => {
+                                let ship = self
+                                    .ships
+                                    .iter()
+                                    .find(|s| s.id.as_bytes() == ship_id.as_bytes())
+                                    .expect(&format!(
+                                        "Ship id {} should exist but not found.",
+                                        ship_id
+                                    ));
+                                ship.kind.code().to_string()
+                            }
                         }
-                        Cell::Ship(ship_id) => {
-                            let ship = self
-                                .ships
-                                .iter()
-                                .find(|s| s.id.as_bytes() == ship_id.as_bytes())
-                                .expect(&format!("Ship id {} should exist but not found.", ship_id));
-                            ship.kind.code().to_string()
-                        }
-                    }
-                }).collect()
+                    })
+                    .collect()
             })
             .collect();
 
@@ -429,19 +486,37 @@ impl fmt::Display for LaunchedFireView<'_> {
         let board = self.0;
         let size = board.size.size() as usize;
 
-        let hit_offsets: Vec<usize> = board.launched_fire.iter().filter(|s| s.hit).map(|s| s.offset).collect();
-        let miss_offsets: Vec<usize> = board.launched_fire.iter().filter(|s| !s.hit).map(|s| s.offset).collect();
+        let hit_offsets: Vec<usize> = board
+            .launched_fire
+            .iter()
+            .filter(|s| s.hit)
+            .map(|s| s.offset)
+            .collect();
+        let miss_offsets: Vec<usize> = board
+            .launched_fire
+            .iter()
+            .filter(|s| !s.hit)
+            .map(|s| s.offset)
+            .collect();
 
         let rows: Vec<Vec<String>> = (0..size)
             .map(|row_idx| {
-                (0..size).map(|col_idx| {
-                    let flat_idx = row_idx * size + col_idx;
-                    if let Some(shot) = board.launched_fire.iter().find(|s| s.offset == flat_idx) {
-                        if shot.hit { "XX".to_string() } else { "**".to_string() }
-                    } else {
-                        "~~".to_string()
-                    }
-                }).collect()
+                (0..size)
+                    .map(|col_idx| {
+                        let flat_idx = row_idx * size + col_idx;
+                        if let Some(shot) =
+                            board.launched_fire.iter().find(|s| s.offset == flat_idx)
+                        {
+                            if shot.hit {
+                                "XX".to_string()
+                            } else {
+                                "**".to_string()
+                            }
+                        } else {
+                            "~~".to_string()
+                        }
+                    })
+                    .collect()
             })
             .collect();
 
@@ -1144,7 +1219,11 @@ mod tests {
 
         let report = board.receive_fire(0, 0).expect("Fire should succeed");
 
-        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report.status, "Should be a hit");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Destroyer),
+            report.status,
+            "Should be a hit"
+        );
         assert!(
             report.ship_destroyed.is_none(),
             "Ship should not be destroyed yet"
@@ -1167,12 +1246,20 @@ mod tests {
 
         // Hit first cell
         let report1 = board.receive_fire(0, 0).expect("Fire should succeed");
-        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report1.status, "First hit should succeed");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Destroyer),
+            report1.status,
+            "First hit should succeed"
+        );
         assert!(report1.ship_destroyed.is_none(), "Ship not destroyed yet");
 
         // Hit second cell - should destroy destroyer (length 2)
         let report2 = board.receive_fire(0, 1).expect("Fire should succeed");
-        assert_eq!(FireStatus::Hit(ShipKind::Destroyer), report2.status, "Second hit should succeed");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Destroyer),
+            report2.status,
+            "Second hit should succeed"
+        );
         assert!(report2.ship_destroyed.is_some(), "Ship should be destroyed");
         assert_eq!(
             report2.ship_destroyed.unwrap().kind,
@@ -1204,7 +1291,11 @@ mod tests {
         board.receive_fire(3, 1).expect("Fire should succeed");
         let report = board.receive_fire(4, 1).expect("Fire should succeed");
 
-        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report.status, "Should be a hit");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Cruiser),
+            report.status,
+            "Should be a hit"
+        );
         assert!(report.ship_destroyed.is_some(), "Ship should be destroyed");
         assert_eq!(
             report.ship_destroyed.unwrap().kind,
@@ -1284,13 +1375,25 @@ mod tests {
 
         // Hit vertical cruiser at different x coordinates
         let report1 = board.receive_fire(2, 1).expect("Fire should succeed");
-        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report1.status, "Should be a hit");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Cruiser),
+            report1.status,
+            "Should be a hit"
+        );
 
         let report2 = board.receive_fire(3, 1).expect("Fire should succeed");
-        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report2.status, "Should be a hit");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Cruiser),
+            report2.status,
+            "Should be a hit"
+        );
 
         let report3 = board.receive_fire(4, 1).expect("Fire should succeed");
-        assert_eq!(FireStatus::Hit(ShipKind::Cruiser), report3.status, "Should be a hit");
+        assert_eq!(
+            FireStatus::Hit(ShipKind::Cruiser),
+            report3.status,
+            "Should be a hit"
+        );
         assert!(
             report3.ship_destroyed.is_some(),
             "Cruiser should be destroyed"
@@ -1425,8 +1528,16 @@ mod tests {
         assert!(board.is_board_ready(), "Board should be ready");
 
         // Try to place another ship
-        let result = board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal));
-        assert!(result.is_err(), "Should not be able to place ship when board is ready");
+        let result = board.place_ship(Ship::new(
+            ShipKind::Destroyer,
+            4,
+            4,
+            Orientation::Horizontal,
+        ));
+        assert!(
+            result.is_err(),
+            "Should not be able to place ship when board is ready"
+        );
         assert!(
             matches!(result.unwrap_err(), AllShipsAlreadyPlaced),
             "Error should be AllShipsPlaced"
@@ -1452,7 +1563,12 @@ mod tests {
         board.commit(12345).expect("Commit should succeed");
 
         // Try to place another ship after commitment
-        let result = board.place_ship(Ship::new(ShipKind::Destroyer, 4, 4, Orientation::Horizontal));
+        let result = board.place_ship(Ship::new(
+            ShipKind::Destroyer,
+            4,
+            4,
+            Orientation::Horizontal,
+        ));
         assert!(
             result.is_err(),
             "Should not be able to place ship after commitment"
@@ -1506,7 +1622,10 @@ mod tests {
 
         // Try to commit incomplete board
         let result = board.commit(12345);
-        assert!(result.is_err(), "Should not be able to commit incomplete board");
+        assert!(
+            result.is_err(),
+            "Should not be able to commit incomplete board"
+        );
         assert!(
             matches!(result.unwrap_err(), BoardNotReady),
             "Error should be BoardNotReady"
@@ -1559,7 +1678,10 @@ mod tests {
             2,
             Orientation::Horizontal,
         ));
-        assert!(result.is_err(), "Should not allow more Destroyers than permitted");
+        assert!(
+            result.is_err(),
+            "Should not allow more Destroyers than permitted"
+        );
         assert!(
             matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }),
             "Error should be InvalidShipPlacementKind"
@@ -1571,12 +1693,7 @@ mod tests {
         let mut board = Board::new(BoardSize::Smaller(SmallerBoardSize::SixBySix));
 
         // Try to place Carrier on 6x6 board (not allowed)
-        let result = board.place_ship(Ship::new(
-            ShipKind::Carrier,
-            0,
-            0,
-            Orientation::Horizontal,
-        ));
+        let result = board.place_ship(Ship::new(ShipKind::Carrier, 0, 0, Orientation::Horizontal));
         assert!(result.is_err(), "Should not allow ineligible ship kinds");
         assert!(
             matches!(result.unwrap_err(), InvalidShipPlacementKind { .. }),

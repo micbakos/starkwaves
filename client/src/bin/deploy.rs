@@ -1,7 +1,7 @@
 #[path = "common.rs"]
 mod common;
 
-use common::{check_sncast, wait_for_tx, Config, CONTRACT_PATH};
+use common::{CONTRACT_PATH, Config, check_sncast, wait_for_tx};
 use starknet_rust::accounts::{Account, AccountError, ConnectedAccount, SingleOwnerAccount};
 use starknet_rust::contract::{ContractFactory, UdcSelector};
 use starknet_rust::core::types::{
@@ -12,7 +12,7 @@ use starknet_rust::providers::{JsonRpcClient, ProviderError};
 use starknet_rust::signers::LocalWallet;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{exit, Command, Stdio};
+use std::process::{Command, Stdio, exit};
 use std::str::FromStr;
 use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-pub mod starkwaves;
-pub mod mappings;
 #[allow(warnings)]
 pub(crate) mod generated;
+pub mod mappings;
+pub mod starkwaves;

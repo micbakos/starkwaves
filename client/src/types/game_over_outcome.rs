@@ -4,14 +4,14 @@ use cainome::cairo_serde::ContractAddress;
 #[derive(Debug, Clone)]
 pub enum GameOverOutcome {
     Won(Reason),
-    Lost(Reason)
+    Lost(Reason),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reason {
     FairGame,
     FailedToProvideProof,
-    TimedOut
+    TimedOut,
 }
 
 impl GameOverOutcome {
@@ -31,9 +31,7 @@ impl GameOverOutcome {
                     GameOverOutcome::Won(Reason::FailedToProvideProof)
                 }
             }
-            Outcome::Null => {
-                GameOverOutcome::Lost(Reason::FailedToProvideProof)
-            }
+            Outcome::Null => GameOverOutcome::Lost(Reason::FailedToProvideProof),
             Outcome::Timeout(maybe_loser) => {
                 if let Some(loser) = maybe_loser {
                     if loser == player_address {
@@ -44,7 +42,6 @@ impl GameOverOutcome {
                 } else {
                     GameOverOutcome::Lost(Reason::TimedOut)
                 }
-
             }
         }
     }

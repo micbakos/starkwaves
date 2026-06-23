@@ -7,7 +7,7 @@
 /// Module containing custom serialization/deserialization implementations.
 pub mod serde;
 
-/// Module containing core types for representing objects in Starknet.
+/// Module containing app types for representing objects in Starknet.
 pub mod types;
 
 /// High-level utilities for cryptographic operations used in Starknet.

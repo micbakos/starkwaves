@@ -1,8 +1,8 @@
+use crate::types::board_size::BoardSize;
+use crate::types::error::GameError;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use crate::types::board_size::BoardSize;
-use crate::types::error::GameError;
 
 /// Represents different types of ships in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
@@ -10,15 +10,15 @@ pub enum ShipKind {
     #[display("Super Carrier")]
     SuperCarrier, // Size 6
     #[display("Carrier")]
-    Carrier,      // Size 5
+    Carrier, // Size 5
     #[display("Battleship")]
-    Battleship,   // Size 4
+    Battleship, // Size 4
     #[display("Cruiser")]
-    Cruiser,      // Size 3
+    Cruiser, // Size 3
     #[display("Submarine")]
-    Submarine,    // Size 3
+    Submarine, // Size 3
     #[display("Destroyer")]
-    Destroyer,    // Size 2
+    Destroyer, // Size 2
 }
 
 impl ShipKind {
@@ -45,7 +45,7 @@ impl ShipKind {
             ShipKind::SuperCarrier => 6,
         }
     }
-    
+
     pub fn code(&self) -> &str {
         match self {
             ShipKind::SuperCarrier => "SC",
@@ -198,7 +198,11 @@ mod tests {
         set.insert(ShipKind::Carrier);
         set.insert(ShipKind::Carrier); // Duplicate
 
-        assert_eq!(set.len(), 1, "Duplicate ships should not be added to HashSet");
+        assert_eq!(
+            set.len(),
+            1,
+            "Duplicate ships should not be added to HashSet"
+        );
         assert!(set.contains(&ShipKind::Carrier));
     }
 }

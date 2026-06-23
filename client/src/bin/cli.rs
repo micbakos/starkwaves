@@ -3,8 +3,8 @@ use clap::Parser;
 use dotenv::dotenv;
 use log::LevelFilter;
 use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
-use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust::providers::JsonRpcClient;
+use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust::signers::{LocalWallet, SigningKey};
 use starknet_rust_core::types::Felt;
 use starknet_rust_core::utils::cairo_short_string_to_felt;
@@ -17,7 +17,7 @@ use starkwaves_client::types::result::Result;
 use starkwaves_client::types::{Orientation, Ship, ShipKind};
 use std::env;
 use std::path::PathBuf;
-use std::process::{exit, Command, Stdio};
+use std::process::{Command, Stdio, exit};
 use std::sync::Arc;
 use url::Url;
 
@@ -52,7 +52,7 @@ impl Args {
 #[derive(Debug, Clone)]
 pub enum PlayerPreset {
     Local(LocalKey),
-    Cartridge(PathBuf)
+    Cartridge(PathBuf),
 }
 
 #[derive(Debug, Clone)]
@@ -73,15 +73,16 @@ pub struct Environment {
 impl Environment {
     pub fn new(args: &Args) -> Self {
         dotenv().ok();
-        let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
+        let preset =
+            env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
         dotenv::from_filename(format!(".env.{}", preset)).ok();
 
         let chain_id_str = env::var("CHAIN_ID").expect("Should have CHAIN_ID in .env");
         let rpc_url_str = env::var("RPC_URL").expect("Should have RPC_URL in .env");
         let ws_url_str = env::var("WS_URL").expect("Should have WS_URL in .env");
 
-        let contract_address_str =
-            env::var("CONTRACT_ADDR").expect("Should have CONTRACT_ADDRESS in .env.\nRun: \n\tcargo run --bin deploy");
+        let contract_address_str = env::var("CONTRACT_ADDR")
+            .expect("Should have CONTRACT_ADDRESS in .env.\nRun: \n\tcargo run --bin deploy");
         let contract_address =
             Felt::from_hex(contract_address_str.as_str()).expect("Invalid contract address");
 
@@ -90,14 +91,14 @@ impl Environment {
             None => {
                 let controller_cli_path = Self::controller_cli_path();
                 if controller_cli_path.is_none() {
-                    panic!("Cartridge controller cli should be installed if not private key and address is provided\n ↳ https://github.com/cartridge-gg/controller-cli#installation");
+                    panic!(
+                        "Cartridge controller cli should be installed if not private key and address is provided\n ↳ https://github.com/cartridge-gg/controller-cli#installation"
+                    );
                 }
 
                 PlayerPreset::Cartridge(controller_cli_path.unwrap())
             }
-            Some(local_key) => {
-                PlayerPreset::Local(local_key)
-            }
+            Some(local_key) => PlayerPreset::Local(local_key),
         };
 
         Self {
@@ -144,7 +145,8 @@ impl Environment {
     pub async fn player(&self, rpc: &JsonRpcClient<HttpTransport>) -> Result<Box<dyn GameAccount>> {
         match &self.preset {
             PlayerPreset::Local(local_key) => {
-                let signer = LocalWallet::from(SigningKey::from_secret_scalar(local_key.private_key));
+                let signer =
+                    LocalWallet::from(SigningKey::from_secret_scalar(local_key.private_key));
 
                 Ok(Box::new(SingleOwnerAccount::new(
                     rpc.clone(),
@@ -155,12 +157,10 @@ impl Environment {
                 )))
             }
             PlayerPreset::Cartridge(cli_path) => {
-                let cartridge_account = CartridgeAccount::resolve(
-                    cli_path,
-                    self.contract_address,
-                    self.chain_id
-                ).await?;
-                
+                let cartridge_account =
+                    CartridgeAccount::resolve(cli_path, self.contract_address, self.chain_id)
+                        .await?;
+
                 Ok(Box::new(cartridge_account))
             }
         }
@@ -192,8 +192,10 @@ async fn main() {
         env.ws_url,
         player,
         BoardSize::Smaller(SmallerBoardSize::SixBySix),
-        Arc::new(print_callback.clone())
-    ).await.unwrap_or_else(|err| {
+        Arc::new(print_callback.clone()),
+    )
+    .await
+    .unwrap_or_else(|err| {
         eprintln!("{err}");
         exit(-1);
     });
@@ -201,12 +203,13 @@ async fn main() {
     {
         let game = game.lock().await;
         if let Some(opponent) = game.opponent() {
-            print_callback.on_update(GameUpdate::OpponentJoined { opponent }).await;
+            print_callback
+                .on_update(GameUpdate::OpponentJoined { opponent })
+                .await;
         } else {
             println!("You entered lobby {}", game.board_size());
         }
     }
-
 
     let mut input = String::new();
     let mut raw_input = Vec::new();
@@ -214,10 +217,13 @@ async fn main() {
         input.clear();
         raw_input.clear();
         use std::io::BufRead;
-        std::io::stdin().lock().read_until(b'\n', &mut raw_input).unwrap_or_else(|err| {
-            eprintln!("Failed to read prompt {err}");
-            exit(-1);
-        });
+        std::io::stdin()
+            .lock()
+            .read_until(b'\n', &mut raw_input)
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to read prompt {err}");
+                exit(-1);
+            });
         input = String::from_utf8_lossy(&raw_input).into_owned();
 
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
@@ -325,7 +331,12 @@ impl GameCallback for PrintCallback {
             GameUpdate::IncomingAttack { x, y } => {
                 println!("Incoming attack at ({}, {})", x, y);
             }
-            GameUpdate::AttackResult { x, y, hit, destroyed_ship } => {
+            GameUpdate::AttackResult {
+                x,
+                y,
+                hit,
+                destroyed_ship,
+            } => {
                 if hit {
                     println!("Your attack at ({}, {}) was a HIT!", x, y);
                     if destroyed_ship.is_some() {
@@ -350,16 +361,16 @@ impl GameCallback for PrintCallback {
                         } else if reason == Reason::TimedOut {
                             println!("The opponent failed to play in time.");
                         }
-                    },
-                    GameOverOutcome::Lost(reason) => {
-                        match reason {
-                            Reason::FairGame => println!("Game over, You Lost :("),
-                            Reason::FailedToProvideProof => println!("Game over, you failed to provide proof of your board"),
-                            Reason::TimedOut => {
-                                println!("Game over, you failed to play in time.");
-                            }
-                        }
                     }
+                    GameOverOutcome::Lost(reason) => match reason {
+                        Reason::FairGame => println!("Game over, You Lost :("),
+                        Reason::FailedToProvideProof => {
+                            println!("Game over, you failed to provide proof of your board")
+                        }
+                        Reason::TimedOut => {
+                            println!("Game over, you failed to play in time.");
+                        }
+                    },
                 }
                 exit(0);
             }

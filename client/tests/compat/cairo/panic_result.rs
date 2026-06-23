@@ -51,23 +51,27 @@ impl From<CairoValue> for CairoResult {
                         _ => Err(CairoError::from_values(
                             vec![*value],
                             "Found ok result but returned value was not a struct",
-                        ))
+                        )),
                     }
                 } else if tag == 1 {
                     decode_cairo_panic(value.as_ref())
                         .map(|e| Err(e))
                         .unwrap_or(Err(CairoError::from_values(
                             vec![*value],
-                            "Could not decode error."
+                            "Could not decode error.",
                         )))
                 } else {
-                    Err(CairoError::from_values(vec![*value], format!("Tag for enum was neither 0 (ok) or 1 (Err). It was {}", tag).as_ref()))
+                    Err(CairoError::from_values(
+                        vec![*value],
+                        format!("Tag for enum was neither 0 (ok) or 1 (Err). It was {}", tag)
+                            .as_ref(),
+                    ))
                 }
             }
             _ => Err(CairoError::from_values(
                 vec![value.0],
-                "Cairo result was not an enum (PanicResult)."
-            ))
+                "Cairo result was not an enum (PanicResult).",
+            )),
         }
     }
 }
@@ -77,7 +81,7 @@ fn decode_cairo_panic(panic_struct: &Value) -> Option<CairoError> {
         Value::Struct { fields, .. } => {
             if fields.len() >= 2 {
                 if let Value::Array(panic_data) = &fields[1] {
-                    return decode_error(panic_data)
+                    return decode_error(panic_data);
                 }
             }
         }
@@ -86,7 +90,6 @@ fn decode_cairo_panic(panic_struct: &Value) -> Option<CairoError> {
 
     None
 }
-
 
 fn decode_error(felts: &[Value]) -> Option<CairoError> {
     let mut message = String::new();
@@ -97,7 +100,8 @@ fn decode_error(felts: &[Value]) -> Option<CairoError> {
             let bytes = felt.to_bytes_be();
 
             // Skip leading zeros and decode as UTF-8
-            let decoded = bytes.iter()
+            let decoded = bytes
+                .iter()
                 .skip_while(|&&b| b == 0)
                 .copied()
                 .collect::<Vec<u8>>();
@@ -112,8 +116,11 @@ fn decode_error(felts: &[Value]) -> Option<CairoError> {
 
     // Fallback: show raw felt values if decode failed
     if message.is_empty() {
-        return None
+        return None;
     }
 
-    Some(CairoError::from_values(felts.iter().cloned(), message.as_ref()))
+    Some(CairoError::from_values(
+        felts.iter().cloned(),
+        message.as_ref(),
+    ))
 }

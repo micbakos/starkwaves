@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use cainome::rs::{Abigen, ExecutionVersion};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -65,19 +65,19 @@ fn main() {
             "serde::Serialize".into(),
             "serde::Deserialize".into(),
         ])
-        .with_types_aliases(HashMap::from([
-            ("openzeppelin_access::ownable::ownable::OwnableComponent::Event".to_string(), "OwnableComponentEvent".to_string())
-        ]));
+        .with_types_aliases(HashMap::from([(
+            "openzeppelin_access::ownable::ownable::OwnableComponent::Event".to_string(),
+            "OwnableComponentEvent".to_string(),
+        )]));
 
-    let generated = abigen
-        .generate()
-        .expect("Unable to generate Abigen.");
+    let generated = abigen.generate().expect("Unable to generate Abigen.");
     let generated_str = generated.to_string();
     let patched = generated_str.replace("starknet::", "starknet_rust::");
 
     let existing = fs::read_to_string(&output_path).unwrap_or_default();
     if existing != patched {
-        fs::write(&output_path, &patched).expect("Couldn't write to src/types/contract/starkwaves.rs");
+        fs::write(&output_path, &patched)
+            .expect("Couldn't write to src/types/contract/starkwaves.rs");
     }
 
     let mod_rs_path = output_dir.join("mod.rs");

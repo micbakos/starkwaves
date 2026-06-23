@@ -27,24 +27,27 @@ mod tests {
                 .execute_cairo_fn(
                     "merkle::compute_merkle_root",
                     vec![
-                        Value::Array(board.iter().map(|i| {
-                            if *i == true {
-                                Value::Felt252(Felt::ONE)
-                            } else {
-                                Value::Felt252(Felt::ZERO)
-                            }
-                        }).collect()),
+                        Value::Array(
+                            board
+                                .iter()
+                                .map(|i| {
+                                    if *i == true {
+                                        Value::Felt252(Felt::ONE)
+                                    } else {
+                                        Value::Felt252(Felt::ZERO)
+                                    }
+                                })
+                                .collect(),
+                        ),
                         Value::Felt252(salt.into()),
                     ],
                 )
-                .and_then(|value: Value| {
-                    match value {
-                        Value::Felt252(felt) => Ok(felt),
-                        _ => Err(CairoError::from_values(
-                            vec![value],
-                            "Expected Felt252 enum as return type of compute_merkle_root",
-                        ))
-                    }
+                .and_then(|value: Value| match value {
+                    Value::Felt252(felt) => Ok(felt),
+                    _ => Err(CairoError::from_values(
+                        vec![value],
+                        "Expected Felt252 enum as return type of compute_merkle_root",
+                    )),
                 })
                 .expect("Failed to compute merkle root")
         }
@@ -72,7 +75,7 @@ mod tests {
                     } = value.clone()
                     {
                         if let Some(name) = debug_name
-                            && name == "core::bool"
+                            && name == "app::bool"
                         {
                             Ok(tag == 1)
                         } else {

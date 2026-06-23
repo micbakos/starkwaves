@@ -1,13 +1,13 @@
+use crate::types::Board;
+use crate::types::board_size::BoardSize;
 use cainome::cairo_serde::ContractAddress;
 use enum_as_inner::EnumAsInner;
 use starknet_rust::core::types::Felt;
-use crate::types::Board;
-use crate::types::board_size::BoardSize;
 
 #[derive(Debug, EnumAsInner)]
 pub enum GameState {
     InLobby(BoardSize),
-    InGame(GameData)
+    InGame(GameData),
 }
 
 #[derive(Debug)]
@@ -15,7 +15,7 @@ pub struct GameData {
     pub game_id: Felt,
     pub opponent: ContractAddress,
     pub board: Board,
-    pub state: InGameState
+    pub state: InGameState,
 }
 
 impl GameData {
@@ -30,7 +30,7 @@ impl GameData {
 
     pub fn can_attack(&self, player_address: &ContractAddress) -> bool {
         let Some(turn) = self.state.as_playing() else {
-            return false
+            return false;
         };
 
         turn.attacking_player == *player_address && turn.current_attack.is_none()
@@ -45,12 +45,11 @@ impl GameData {
 pub enum InGameState {
     PlacingShips,
     Playing(PlayTurn),
-    Ended
+    Ended,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct PlayTurn {
     pub attacking_player: ContractAddress,
-    pub current_attack: Option<(u8, u8)>
+    pub current_attack: Option<(u8, u8)>,
 }

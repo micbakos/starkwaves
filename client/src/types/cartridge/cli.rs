@@ -1,16 +1,15 @@
-use crate::types::cartridge::types::{PolicyMethod, SessionAuthPrompt, SessionAuthSuccess, SessionStatus, SessionStatusData};
+use crate::types::cartridge::types::{
+    PolicyMethod, SessionAuthPrompt, SessionAuthSuccess, SessionStatus, SessionStatusData,
+};
 use crate::types::error::{CartridgeCliError, GameError};
 use crate::types::result::Result;
-use clap::builder::Str;
-use log::{error, info, warn};
+use log::{error, info};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use starknet_rust::macros::short_string;
 use starknet_rust_core::types::{Call, Felt};
 use starknet_rust_core::utils::{get_selector_from_name, parse_cairo_short_string};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
@@ -110,22 +109,21 @@ struct ExecuteResult {
 
 pub struct CartridgeCLI {
     path: PathBuf,
-    policies: Vec<PolicyMethod>
+    policies: Vec<PolicyMethod>,
 }
 
 impl CartridgeCLI {
-
-    pub fn new(
-        path: impl Into<PathBuf>,
-        policies: Vec<PolicyMethod>
-    ) -> Self {
-        Self { path: path.into(), policies }
+    pub fn new(path: impl Into<PathBuf>, policies: Vec<PolicyMethod>) -> Self {
+        Self {
+            path: path.into(),
+            policies,
+        }
     }
 
     pub async fn auth(
         &self,
         contract_address: Felt,
-        chain_id: &Felt
+        chain_id: &Felt,
     ) -> Result<SessionAuthSuccess> {
         let json = Self::policies_json(contract_address, self.policies.clone());
         let temp_policies = Self::temp_file("policies", json).await?;
@@ -137,7 +135,8 @@ impl CartridgeCLI {
                     "auth",
                     "--file",
                     temp_policies.to_string_lossy().as_ref(),
-                    "--chain-id", parse_cairo_short_string(chain_id).unwrap().as_str(),
+                    "--chain-id",
+                    parse_cairo_short_string(chain_id).unwrap().as_str(),
                     "--overwrite",
                 ],
                 |event| {
@@ -159,7 +158,8 @@ impl CartridgeCLI {
     pub async fn status(&self) -> Result<SessionStatus> {
         let data: SessionStatusData = self.run_cli(&["session", "status"]).await?;
 
-        data.session.ok_or(GameError::CartridgeCliError(CartridgeCliError::NoSession))
+        data.session
+            .ok_or(GameError::CartridgeCliError(CartridgeCliError::NoSession))
     }
 
     pub async fn username(&self) -> Result<String> {
@@ -261,7 +261,9 @@ impl CartridgeCLI {
         let mut buf = String::new();
 
         while let Some(line) = lines.next_line().await.map_err(|e| {
-            GameError::CartridgeCliError(CartridgeCliError::CliError(format!("Failed reading controller output: {e}")))
+            GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
+                "Failed reading controller output: {e}"
+            )))
         })? {
             info!("{line}");
 
@@ -305,11 +307,15 @@ impl CartridgeCLI {
         let _ = child.wait().await;
 
         if let Some(err) = pending_error {
-            return Err(GameError::CartridgeCliError(CartridgeCliError::CliError(format!("{}", err))));
+            return Err(GameError::CartridgeCliError(CartridgeCliError::CliError(
+                format!("{}", err),
+            )));
         }
 
         let data = last_success.ok_or_else(|| {
-            GameError::CartridgeCliError(CartridgeCliError::CliError("No success event".to_string()))
+            GameError::CartridgeCliError(CartridgeCliError::CliError(
+                "No success event".to_string(),
+            ))
         })?;
 
         serde_json::from_value(data).map_err(|e| {
@@ -321,16 +327,21 @@ impl CartridgeCLI {
         let path =
             std::env::temp_dir().join(format!("starkwaves-{}-{}.json", name, Uuid::new_v4()));
 
-        tokio::fs::write(&path, content)
-            .await
-            .map_err(|e| GameError::CartridgeCliError(CartridgeCliError::CliError(format!("Failed to write calls file: {e}"))))?;
+        tokio::fs::write(&path, content).await.map_err(|e| {
+            GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
+                "Failed to write calls file: {e}"
+            )))
+        })?;
 
         Ok(path)
     }
 
     async fn remove_temp_file(path: PathBuf) -> Result<()> {
-        tokio::fs::remove_file(&path).await
-            .map_err(|e| GameError::CartridgeCliError(CartridgeCliError::CliError(format!("Failed to delete calls file: {e}"))))
+        tokio::fs::remove_file(&path).await.map_err(|e| {
+            GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
+                "Failed to delete calls file: {e}"
+            )))
+        })
     }
 
     fn policies_json(contract_address: Felt, policies: Vec<PolicyMethod>) -> String {
@@ -341,7 +352,8 @@ impl CartridgeCLI {
                     "methods": policies
                 }
             }
-        }).to_string()
+        })
+        .to_string()
     }
 
     fn method_selector(&self, selector: &Felt) -> Option<String> {
@@ -351,6 +363,7 @@ impl CartridgeCLI {
                 let curr_selector = get_selector_from_name(p.entrypoint).unwrap();
 
                 return curr_selector == *selector;
-            }).map(|p| p.entrypoint.to_string())
+            })
+            .map(|p| p.entrypoint.to_string())
     }
 }

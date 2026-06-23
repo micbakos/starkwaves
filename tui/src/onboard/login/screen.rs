@@ -1,19 +1,18 @@
-use crate::onboard::start::types::{Effect, Intent, Menu, State};
-use crate::types::AppEffect;
-use crate::types::AppIntent;
+use crate::app::types::CoreState;
+use crate::onboard::login::types::{Effect, Intent, LoginOption, State};
 use crate::types::screen::Screen;
+use crate::types::{AppEffect, AppIntent};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::Line;
+use ratatui::prelude::{Color, Line, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use strum::VariantArray;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub struct StartScreen;
+pub struct LoginScreen {}
 
-impl Screen for StartScreen {
+impl Screen for LoginScreen {
     type Intent = Intent;
     type Effect = Effect;
     type State = State;
@@ -21,42 +20,18 @@ impl Screen for StartScreen {
     fn reduce(
         state: &Self::State,
         intent: Self::Intent,
-        core: &crate::app::types::CoreState,
+        _core: &CoreState,
     ) -> (Self::State, Vec<AppEffect>) {
         let mut new_state = state.clone();
-        let mut effects: Vec<AppEffect> = vec![];
         match intent {
             Intent::OnPressDown => new_state.press_down(),
             Intent::OnPressUp => new_state.press_up(),
-            Intent::OnSelect => {
-                match state.selected_button {
-                    Menu::Start => {
-                        if core.account.is_none() {
-                            let login_screen_state = crate::login::types::State::new();
-                            effects.push(
-                                crate::app::types::Effect::RequestNavigateTo(
-                                    login_screen_state.into(),
-                                )
-                                .into(),
-                            )
-                        } else {
-                            // Open lobby
-                        }
-                    }
-                    Menu::Quit => effects.push(crate::app::types::Effect::RequestQuit.into()),
-                }
-            }
-        };
-
-        (new_state, effects)
+            Intent::OnSelect => {}
+        }
+        (new_state, vec![])
     }
 
-    fn render(
-        state: &Self::State,
-        _core: &crate::app::types::CoreState,
-        frame: &mut Frame,
-        area: Rect,
-    ) {
+    fn render(state: &Self::State, _core: &CoreState, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .border_style(Style::default().fg(Color::Magenta))
             .border_type(BorderType::Rounded)
@@ -65,15 +40,15 @@ impl Screen for StartScreen {
         let inner_area = block.inner(area);
         frame.render_widget(block, area);
 
-        let lines = Menu::VARIANTS
+        let lines = LoginOption::VARIANTS
             .into_iter()
-            .map(|menu| {
-                let label = match menu {
-                    Menu::Start => "Start Game",
-                    Menu::Quit => "Quit",
+            .map(|option| {
+                let label = match option {
+                    LoginOption::Local => "Local Account",
+                    LoginOption::Cartridge => "Cartridge",
                 };
 
-                let line_style = if state.selected_button == *menu {
+                let line_style = if state.login_option == *option {
                     Style::default().reversed()
                 } else {
                     Style::default()

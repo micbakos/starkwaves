@@ -1,7 +1,7 @@
 use crate::types::account::game_account::GameAccount;
 use crate::types::board_size::BoardSize;
 use crate::types::contract::generated::Event;
-use crate::types::contract::mappings::{in_game_event_keys, in_lobby_event_keys, IntoEvents};
+use crate::types::contract::mappings::{IntoEvents, in_game_event_keys, in_lobby_event_keys};
 use crate::types::contract::starkwaves::Starkwaves;
 use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
@@ -19,8 +19,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use url::Url;
 
@@ -47,7 +47,7 @@ pub enum GameUpdate {
         x: u8,
         y: u8,
         hit: bool,
-        destroyed_ship: Option<ShipKind>
+        destroyed_ship: Option<ShipKind>,
     },
     /// You were hit at the given position
     YouWereHit {
@@ -60,7 +60,7 @@ pub enum GameUpdate {
     GameOver {
         outcome: GameOverOutcome,
     },
-    Reset
+    Reset,
 }
 
 #[async_trait]
@@ -96,13 +96,11 @@ impl Game {
         let contract = Starkwaves::new(contract_address);
 
         let call = contract.request_start_game(&board_size.into());
-        let (events, block_number) = player.send_and_wait(vec![call])
-            .await
-            .and_then(|info| {
-                info.receipt
-                    .into_events()
-                    .map(|events| (events, info.block.block_number()))
-            })?;
+        let (events, block_number) = player.send_and_wait(vec![call]).await.and_then(|info| {
+            info.receipt
+                .into_events()
+                .map(|events| (events, info.block.block_number()))
+        })?;
 
         let event = events
             .first()
@@ -130,7 +128,9 @@ impl Game {
                         board_size,
                         sender,
                         block_number.saturating_sub(1),
-                    ).await {
+                    )
+                    .await
+                    {
                         log::error!("Event subscription error: {}", e);
                     }
                 });
@@ -179,7 +179,9 @@ impl Game {
                         game_id,
                         sender,
                         block_number,
-                    ).await {
+                    )
+                    .await
+                    {
                         log::error!("Event subscription error: {}", e);
                     }
                 });
@@ -196,14 +198,10 @@ impl Game {
                 Ok(game)
             }
             Event::Reset(_) => Err(GameError::ContractReset),
-            _ => {
-                Err(GameError::InvalidState(
-                    format!(
-                        "Expected PlayerEntererLobby or PlayersAssembled but received {:?}",
-                        event
-                    )
-                ))
-            }
+            _ => Err(GameError::InvalidState(format!(
+                "Expected PlayerEntererLobby or PlayersAssembled but received {:?}",
+                event
+            ))),
         }
     }
 
@@ -353,9 +351,9 @@ impl Game {
         self.state.as_in_game_mut().ok_or(GameError::GameNotStarted)
     }
 
-        fn contract(&self) -> Starkwaves {
-            Starkwaves::new(self.contract_address)
-        }
+    fn contract(&self) -> Starkwaves {
+        Starkwaves::new(self.contract_address)
+    }
 
     async fn subscribe_for_lobby(
         ws_url: Url,
@@ -375,7 +373,10 @@ impl Game {
             finality_status: L2TransactionFinalityStatus::AcceptedOnL2,
         };
 
-        let mut subscription = stream.subscribe_events(events).await.map_err(|e| e.into())?;
+        let mut subscription = stream
+            .subscribe_events(events)
+            .await
+            .map_err(|e| e.into())?;
 
         loop {
             let events_subscription = subscription.recv().await.map_err(|e| e.into())?;
@@ -508,7 +509,9 @@ impl Game {
                             game_id,
                             sender,
                             block_number,
-                        ).await {
+                        )
+                        .await
+                        {
                             log::error!("Event subscription error: {}", e);
                         }
                     });
@@ -586,13 +589,15 @@ impl Game {
 
                 let in_game = self.in_game_data()?;
                 if player_address == event.attacker {
-                    in_game.board.track_launched_fire(event.x, event.y, destroyed_ship);
+                    in_game
+                        .board
+                        .track_launched_fire(event.x, event.y, destroyed_ship);
                     callback
                         .on_update(GameUpdate::AttackResult {
                             x: event.x,
                             y: event.y,
                             hit: event.hit,
-                            destroyed_ship: event.destroyed_ship_kind.map(|k| k.into())
+                            destroyed_ship: event.destroyed_ship_kind.map(|k| k.into()),
                         })
                         .await;
 
@@ -656,9 +661,7 @@ impl Game {
                 }
 
                 let callback = self.callback.clone();
-                callback
-                    .on_update(GameUpdate::Reset)
-                    .await;
+                callback.on_update(GameUpdate::Reset).await;
             }
             _ => {}
         }
