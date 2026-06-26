@@ -15,6 +15,9 @@ color-eyre = "0.6"
 starknet-rust-core = { workspace = true }
 strum = "0.28.0"
 derive_more = { version = "2.1", features = ["from"] }
+dirs = { workspace = true }
+dotenv = { workspace = true }
+url = { version = "2", features = ["serde"] }
 
 [[bin]]
 name = "starkwaves-tui"

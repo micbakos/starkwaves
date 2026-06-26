@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::onboard::start::types::{Effect, Intent, Menu, State};
 use crate::types::AppEffect;
 use crate::types::AppIntent;
@@ -10,6 +11,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use strum::VariantArray;
 use tokio::sync::mpsc::UnboundedSender;
+use crate::app::services::Services;
 
 pub struct StartScreen;
 
@@ -90,7 +92,7 @@ impl Screen for StartScreen {
         frame.render_widget(Paragraph::new(lines), buttons_area);
     }
 
-    fn on_key(key: KeyEvent) -> Option<Self::Intent> {
+    fn on_key(key: KeyEvent, _state: &Self::State) -> Option<Self::Intent> {
         match key.code {
             KeyCode::Up => Some(Intent::OnPressUp),
             KeyCode::Down => Some(Intent::OnPressDown),
@@ -99,5 +101,5 @@ impl Screen for StartScreen {
         }
     }
 
-    async fn run(_effect: Self::Effect, _intents: UnboundedSender<AppIntent>) {}
+    async fn run(_effect: Self::Effect, services: Arc<Services>, _intents: UnboundedSender<AppIntent>) {}
 }

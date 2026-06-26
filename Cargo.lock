@@ -5607,6 +5607,8 @@ dependencies = [
  "color-eyre",
  "crossterm",
  "derive_more",
+ "dirs",
+ "dotenv",
  "enum-as-inner",
  "log",
  "ratatui",
@@ -5614,6 +5616,7 @@ dependencies = [
  "starkwaves-client",
  "strum",
  "tokio",
+ "url",
 ]
 
 [[package]]

@@ -5,7 +5,9 @@ use crossterm::event::KeyEvent;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use std::fmt::Debug;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+use crate::app::services::Services;
 
 pub trait Screen {
     type Intent;
@@ -21,7 +23,7 @@ pub trait Screen {
 
     fn render(state: &Self::State, core: &CoreState, frame: &mut Frame, area: Rect);
 
-    fn on_key(key: KeyEvent) -> Option<Self::Intent>;
+    fn on_key(key: KeyEvent, state: &Self::State) -> Option<Self::Intent>;
 
-    async fn run(effect: Self::Effect, intents: UnboundedSender<AppIntent>);
+    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>);
 }

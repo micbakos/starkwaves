@@ -1,14 +1,18 @@
+use crate::app::services::Services;
 use crate::app::types::CoreState;
-use crate::onboard::login::types::{Effect, Intent, LoginOption, State};
+use crate::onboard::login::types::{CliPopupAction, Effect, Intent, LoginOption, State};
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::prelude::{Color, Line, Style};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::prelude::{Color, Style};
+use ratatui::text::Line;
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use std::sync::Arc;
 use strum::VariantArray;
 use tokio::sync::mpsc::UnboundedSender;
+use crate::app::types::Intent::{OnAccountLoggedIn, OnShowToast};
 
 pub struct LoginScreen {}
 
@@ -23,12 +27,31 @@ impl Screen for LoginScreen {
         _core: &CoreState,
     ) -> (Self::State, Vec<AppEffect>) {
         let mut new_state = state.clone();
+        let mut effects = Vec::<AppEffect>::new();
         match intent {
             Intent::OnPressDown => new_state.press_down(),
             Intent::OnPressUp => new_state.press_up(),
-            Intent::OnSelect => {}
+            Intent::OnSelect => {
+                if let Some(popup) = new_state.cli_popup {
+                    if popup.action == CliPopupAction::Download {
+                        panic!("Not implemented yet");
+                    }
+
+                    new_state.cli_popup = None;
+                } else if state.login_option == LoginOption::Cartridge {
+                    if let Some(path) = Services::cartridge_cli_path() {
+                        effects.push(Effect::RequestLoginWithCartridge(path).into());
+                        new_state.dismiss_popup();
+                    } else {
+                        new_state.reveal_popup();
+                    }
+                }
+            }
+            Intent::OnCliPopupDismiss => new_state.dismiss_popup(),
+            Intent::OnCliPopupNextAction => new_state.select_popup_next_action(),
+            Intent::OnCliPopupPrevAction => new_state.select_popup_prev_action(),
         }
-        (new_state, vec![])
+        (new_state, effects)
     }
 
     fn render(state: &Self::State, _core: &CoreState, frame: &mut Frame, area: Rect) {
@@ -63,16 +86,103 @@ impl Screen for LoginScreen {
             .areas(inner_area);
 
         frame.render_widget(Paragraph::new(lines), buttons_area);
+
+        if let Some(popup) = state.cli_popup {
+            let popup_block = Block::bordered().title("Login with Cartridge");
+            let popup_area = area.centered(Constraint::Percentage(60), Constraint::Percentage(20));
+            frame.render_widget(Clear, popup_area);
+            let inner_area = popup_block.inner(popup_area);
+            frame.render_widget(popup_block, popup_area);
+
+            let popup_layout = Layout::default()
+                .constraints([Constraint::Fill(1), Constraint::Length(1)])
+                .split(inner_area);
+
+            let message = Paragraph::new("Login with Cartridge requires controller cli. Do you want to install controller cli?").centered();
+            let [_, message_area, _] = Layout::default()
+                .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Fill(1)])
+                .areas(popup_layout[0]);
+
+            frame.render_widget(message, message_area);
+
+            let buttons_layout =
+                Layout::horizontal(CliPopupAction::VARIANTS.iter().map(|_| Constraint::Fill(1)))
+                    .split(popup_layout[1]);
+
+            let selected_style = Style::default().reversed();
+            let normal_style = Style::default();
+
+            CliPopupAction::VARIANTS
+                .iter()
+                .enumerate()
+                .for_each(|(index, variant)| {
+                    let label = match variant {
+                        CliPopupAction::Download => "Download",
+                        CliPopupAction::Cancel => "Cancel",
+                    };
+
+                    let style = if popup.action == *variant {
+                        selected_style
+                    } else {
+                        normal_style
+                    };
+
+                    let line = Line::raw(label).centered().style(style);
+                    frame.render_widget(line, buttons_layout[index]);
+                })
+        }
     }
 
-    fn on_key(key: KeyEvent) -> Option<Self::Intent> {
+    fn on_key(key: KeyEvent, state: &Self::State) -> Option<Self::Intent> {
         match key.code {
             KeyCode::Up => Some(Intent::OnPressUp),
             KeyCode::Down => Some(Intent::OnPressDown),
             KeyCode::Enter => Some(Intent::OnSelect),
+            KeyCode::Right => {
+                if state.cli_popup.is_some() {
+                    Some(Intent::OnCliPopupNextAction)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Left => {
+                if state.cli_popup.is_some() {
+                    Some(Intent::OnCliPopupPrevAction)
+                } else {
+                    None
+                }
+            }
+            KeyCode::Esc => {
+                if state.cli_popup.is_some() {
+                    Some(Intent::OnCliPopupDismiss)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
-    async fn run(_effect: Self::Effect, _intents: UnboundedSender<AppIntent>) {}
+    async fn run(
+        effect: Self::Effect,
+        services: Arc<Services>,
+        intents: UnboundedSender<AppIntent>,
+    ) {
+        match effect {
+            Effect::RequestLoginWithCartridge(cli_path) => {
+                let logged_account_result = services.resolve_cartridge_account(cli_path)
+                    .await;
+
+                match logged_account_result {
+                    Ok(logged_account) => {
+                        intents.send(OnAccountLoggedIn(logged_account).into()); // TODO Error
+                        intents.send(Intent::OnCliPopupDismiss.into());
+                    }
+                    Err(error) => {
+                        intents.send(OnShowToast(format!("{}", error)).into()); // TODO Error
+                    }
+                }
+            }
+        }
+    }
 }

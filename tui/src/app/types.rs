@@ -1,6 +1,8 @@
-use crate::onboard::start;
+use crate::app::services::OnChainData;
+use crate::onboard::{splash, start};
 use crate::types::ScreenState;
 use enum_as_inner::EnumAsInner;
+use starknet_rust_core::chain_id;
 use starknet_rust_core::types::Felt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,14 +12,26 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn start() -> Self {
+    pub fn start(
+        on_chain_data: &OnChainData,
+    ) -> Self {
+        let contract_address_string = on_chain_data.contract_address.to_fixed_hex_string();
+        let chain = if on_chain_data.chain_id == chain_id::MAINNET {
+            "Mainnet"
+        } else {
+            "Sepolia"
+        }.to_string();
+
         Self {
             core: CoreState {
                 account: AccountState::None,
                 toast: None,
+                contract_address: contract_address_string,
+                chain,
+                version: env!("CARGO_PKG_VERSION").to_string(),
                 running: true,
             },
-            screens: vec![start::types::State::new().into()],
+            screens: vec![splash::types::State::new().into()],
         }
     }
 }
@@ -26,6 +40,9 @@ impl AppState {
 pub struct CoreState {
     pub account: AccountState,
     pub toast: Option<String>,
+    pub contract_address: String,
+    pub chain: String,
+    pub version: String,
     pub running: bool,
 }
 
@@ -37,15 +54,23 @@ pub enum Effect {
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum Intent {
-    Quit,
-    Open(ScreenState),
-    GoBack,
+    OnQuit,
+    OnOpen(ScreenState),
+    OnGoBack,
+    OnAccountLoggedIn(LoggedAccount),
+    OnShowToast(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum AccountState {
     None,
-    LoggedIn { address: Felt, kind: AccountKind },
+    LoggedIn(LoggedAccount),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoggedAccount {
+    pub address: Felt,
+    pub kind: AccountKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
