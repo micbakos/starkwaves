@@ -5611,6 +5611,7 @@ dependencies = [
  "dotenv",
  "enum-as-inner",
  "log",
+ "paste",
  "ratatui",
  "starknet-rust-core",
  "starkwaves-client",

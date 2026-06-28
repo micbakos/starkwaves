@@ -1,8 +1,8 @@
 use crate::app::services::Services;
-use crate::app::types::{AccountState, AppState, CoreState, Effect, Intent};
+use crate::app::types::{AccountState, CoreState, Effect, Intent};
 use crate::onboard::{login, splash, start};
 use crate::types::screen::Screen;
-use crate::types::{AppEffect, AppIntent, ScreenState};
+use crate::types::{screens_reduce, screens_render, AppEffect, AppIntent, AppState, ScreenEffect, ScreenState, screens_run};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -52,55 +52,21 @@ impl Screen for AppScreen {
                 (state, vec![])
             }
 
-            // TODO: Boilerplate reducers
-            AppIntent::Splash(intent) => {
+            AppIntent::Screen(screen_intent) => {
                 let mut state = state.clone();
-                let screen = state
+
+                let top_screen_state = state
                     .screens
-                    .first_mut()
+                    .first()
                     .expect("Received intent but no screen exists in stack.");
-                let splash_state = screen
-                    .as_splash_mut()
-                    .expect("Received splash intent but no start screen.");
 
-                let (screen_state, effects) =
-                    splash::screen::SplashScreen::reduce(splash_state, intent, &state.core);
+                let (new_screen_state, effects) = screens_reduce(
+                    screen_intent,
+                    top_screen_state.clone(),
+                    &state.core
+                );
 
-                state.screens[0] = ScreenState::Splash(screen_state);
-
-                (state, effects)
-            },
-            AppIntent::Start(intent) => {
-                let mut state = state.clone();
-                let screen = state
-                    .screens
-                    .first_mut()
-                    .expect("Received intent but no screen exists in stack.");
-                let start_state = screen
-                    .as_start_mut()
-                    .expect("Received start intent but no start screen.");
-
-                let (screen_state, effects) =
-                    start::screen::StartScreen::reduce(start_state, intent, &state.core);
-
-                state.screens[0] = ScreenState::Start(screen_state);
-
-                (state, effects)
-            }
-            AppIntent::Login(intent) => {
-                let mut state = state.clone();
-                let screen = state
-                    .screens
-                    .first_mut()
-                    .expect("Received intent but no screen exists in stack.");
-                let login_state = screen
-                    .as_login_mut()
-                    .expect("Received login intent but no login screen.");
-
-                let (screen_state, effects) =
-                    login::screen::LoginScreen::reduce(login_state, intent, &state.core);
-
-                state.screens[0] = ScreenState::Login(screen_state);
+                state.screens[0] = new_screen_state;
 
                 (state, effects)
             }
@@ -115,19 +81,7 @@ impl Screen for AppScreen {
 
         let screen = state.screens.first().expect("No screen exists to render");
 
-        // TODO: boilerplate renderers
-        match screen {
-            ScreenState::Start(screen_state) => {
-                start::screen::StartScreen::render(screen_state, &state.core, frame, layout[0])
-            }
-            ScreenState::Login(screen_state) => {
-                login::screen::LoginScreen::render(screen_state, &state.core, frame, layout[0])
-            }
-            ScreenState::Splash(screen_state) => {
-                splash::screen::SplashScreen::render(screen_state, &state.core, frame, layout[0])
-            }
-        }
-
+        screens_render(&screen, &state.core, frame, layout[0]);
         render_core_details(frame, layout[1], core);
     }
 
@@ -154,17 +108,7 @@ impl Screen for AppScreen {
                     }
                 }
             }
-
-            // TODO: boilerplate effects
-            AppEffect::Splash(effect) => {
-                splash::screen::SplashScreen::run(effect, services, intents).await;
-            }
-            AppEffect::Start(effect) => {
-                start::screen::StartScreen::run(effect, services, intents).await;
-            }
-            AppEffect::Login(effect) => {
-                login::screen::LoginScreen::run(effect, services, intents).await;
-            }
+            AppEffect::Screen(screen_effect) => screens_run(screen_effect, services, intents).await,
         }
     }
 }

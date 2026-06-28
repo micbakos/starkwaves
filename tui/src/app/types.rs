@@ -6,37 +6,6 @@ use starknet_rust_core::chain_id;
 use starknet_rust_core::types::Felt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppState {
-    pub core: CoreState,
-    pub screens: Vec<ScreenState>,
-}
-
-impl AppState {
-    pub fn start(
-        on_chain_data: &OnChainData,
-    ) -> Self {
-        let contract_address_string = on_chain_data.contract_address.to_fixed_hex_string();
-        let chain = if on_chain_data.chain_id == chain_id::MAINNET {
-            "Mainnet"
-        } else {
-            "Sepolia"
-        }.to_string();
-
-        Self {
-            core: CoreState {
-                account: AccountState::None,
-                toast: None,
-                contract_address: contract_address_string,
-                chain,
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                running: true,
-            },
-            screens: vec![splash::types::State::new().into()],
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreState {
     pub account: AccountState,
     pub toast: Option<String>,

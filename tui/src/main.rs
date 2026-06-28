@@ -4,7 +4,6 @@ mod types;
 
 use crate::app::screen::AppScreen;
 use crate::app::services::{OnChainData, Services};
-use crate::app::types::AppState;
 use crate::onboard::{splash, start};
 use crate::types::screen::Screen;
 use color_eyre::Result;
@@ -24,6 +23,7 @@ use url::Url;
 use types::AppEffect;
 use types::AppIntent;
 use types::ScreenState;
+use crate::types::{screens_on_key, AppState};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -133,19 +133,10 @@ fn observe_keys(
                     .first()
                     .expect("Received key but screen should exist")
                     .clone();
-                let intent = match top_screen {
-                    // TODO Boilerplate on_key
-                    ScreenState::Splash(state) => {
-                        splash::screen::SplashScreen::on_key(event, &state).map(|i| i.into())
-                    }
-                    ScreenState::Start(state) => {
-                        start::screen::StartScreen::on_key(event, &state).map(|i| i.into())
-                    }
-                    ScreenState::Login(state) => {
-                        login::screen::LoginScreen::on_key(event, &state).map(|i| i.into())
-                    }
-                }
-                .or_else(|| AppScreen::on_key(event, &current_state));
+
+                let intent = screens_on_key(&top_screen, event)
+                    .map(|i| i.into())
+                    .or_else(|| AppScreen::on_key(event, &current_state));
 
                 if let Some(intent) = intent {
                     intent_sender.send(intent).unwrap();
