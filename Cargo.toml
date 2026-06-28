@@ -17,3 +17,4 @@ starknet-rust-tokio-tungstenite = "0.19.0"
 dirs = "6.0.0"
 dotenv = "0.15.0"
 url = { version = "2", features = ["serde"] }
+thiserror = "2.0.17"

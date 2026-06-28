@@ -10,6 +10,7 @@ use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+use crate::types::result::Result;
 
 pub struct SplashScreen {}
 
@@ -44,11 +45,13 @@ impl Screen for SplashScreen {
         None
     }
 
-    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) {
-        match effect { 
+    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<()> {
+        match effect {
             Effect::RequestCheckLoggedAccount => {
                 // TODO check for active session
-            } 
+            }
         }
+
+        Ok(())
     }
 }

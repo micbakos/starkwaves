@@ -13,6 +13,7 @@ use std::sync::Arc;
 use strum::VariantArray;
 use tokio::sync::mpsc::UnboundedSender;
 use crate::app::types::Intent::{OnAccountLoggedIn, OnShowToast};
+use crate::types::result::Result;
 
 pub struct LoginScreen {}
 
@@ -167,7 +168,7 @@ impl Screen for LoginScreen {
         effect: Self::Effect,
         services: Arc<Services>,
         intents: UnboundedSender<AppIntent>,
-    ) {
+    ) -> Result<()> {
         match effect {
             Effect::RequestLoginWithCartridge(cli_path) => {
                 let logged_account_result = services.resolve_cartridge_account(cli_path)
@@ -175,14 +176,16 @@ impl Screen for LoginScreen {
 
                 match logged_account_result {
                     Ok(logged_account) => {
-                        intents.send(OnAccountLoggedIn(logged_account).into()); // TODO Error
-                        intents.send(Intent::OnCliPopupDismiss.into());
+                        intents.send(OnAccountLoggedIn(logged_account).into())?;
+                        intents.send(Intent::OnCliPopupDismiss.into())?;
                     }
                     Err(error) => {
-                        intents.send(OnShowToast(format!("{}", error)).into()); // TODO Error
+                        intents.send(OnShowToast(format!("{}", error)).into())?;
                     }
                 }
             }
         }
+
+        Ok(())
     }
 }

@@ -4,29 +4,29 @@ mod types;
 
 use crate::app::screen::AppScreen;
 use crate::app::services::{OnChainData, Services};
-use crate::onboard::{splash, start};
+use crate::onboard::splash;
+use crate::types::result::Result;
 use crate::types::screen::Screen;
-use color_eyre::Result;
+use crate::types::{AppState, screens_on_key};
 use crossterm::event::Event;
 use dotenv::dotenv;
 use onboard::login;
 use ratatui::DefaultTerminal;
+use starknet_rust_core::chain_id;
 use starknet_rust_core::types::Felt;
+use starknet_rust_core::utils::cairo_short_string_to_felt;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
-use starknet_rust_core::chain_id;
-use starknet_rust_core::utils::cairo_short_string_to_felt;
+use color_eyre::eyre::eyre;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, watch};
-use url::Url;
 use types::AppEffect;
 use types::AppIntent;
-use types::ScreenState;
-use crate::types::{screens_on_key, AppState};
+use url::Url;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
     let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
     dotenv::from_filename(format!(".env.{}", preset)).ok();
@@ -49,7 +49,9 @@ async fn main() -> Result<()> {
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let result = run(terminal, on_chain_data).await;
+    let result = run(terminal, on_chain_data)
+        .await
+        .map_err(|e| eyre!(e));
     ratatui::restore();
     result
 }
@@ -90,7 +92,7 @@ async fn run(mut terminal: DefaultTerminal, on_chain_data: OnChainData) -> Resul
     });
 
     // First intent to start splash screen's reducer
-    intent_sender.send(splash::types::Intent::OnStart.into()).unwrap(); // TODO Error?
+    intent_sender.send(splash::types::Intent::OnStart.into())?;
 
     // Observe intents and reduce them to new state or effects
     while let Some(intent) = intent_receiver.recv().await {

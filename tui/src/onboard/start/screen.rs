@@ -12,6 +12,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use strum::VariantArray;
 use tokio::sync::mpsc::UnboundedSender;
 use crate::app::services::Services;
+use crate::types::result::Result;
 
 pub struct StartScreen;
 
@@ -101,5 +102,7 @@ impl Screen for StartScreen {
         }
     }
 
-    async fn run(_effect: Self::Effect, services: Arc<Services>, _intents: UnboundedSender<AppIntent>) {}
+    async fn run(_effect: Self::Effect, services: Arc<Services>, _intents: UnboundedSender<AppIntent>) -> Result<()> {
+        Ok(())
+    }
 }

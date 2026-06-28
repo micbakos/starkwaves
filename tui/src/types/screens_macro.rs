@@ -1,5 +1,3 @@
-use crate::types::AppEffect;
-
 #[macro_export]
 macro_rules! screens {
     (
@@ -86,16 +84,18 @@ macro_rules! screens {
             effect: ScreenEffect,
             services: std::sync::Arc<crate::app::services::Services>,
             intents: tokio::sync::mpsc::UnboundedSender<AppIntent>
-        ) {
+        ) -> crate::types::result::Result<()> {
             match effect {
                 $(
                     ScreenEffect::$screen_name(effect) => <$screen_path as crate::types::screen::Screen>::run(
                         effect,
                         services,
                         intents
-                    ).await,
+                    ).await?,
                 )+
             }
+
+            Ok(())
         }
     };
 }

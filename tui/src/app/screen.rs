@@ -9,6 +9,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use std::sync::Arc;
+use crate::types::result::Result;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct AppScreen;
@@ -92,24 +93,25 @@ impl Screen for AppScreen {
         }
     }
 
-    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) {
+    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<()> {
         match effect {
             AppEffect::App(effect) => {
-                // TODO Error?
                 match effect {
                     Effect::RequestQuit => {
-                        intents.send(Intent::OnQuit.into());
+                        intents.send(Intent::OnQuit.into())?;
                     }
                     Effect::RequestNavigateTo(screen_state) => {
-                        intents.send(Intent::OnOpen(screen_state).into());
+                        intents.send(Intent::OnOpen(screen_state).into())?;
                     }
                     Effect::RequestNavigateBack => {
-                        intents.send(Intent::OnGoBack.into());
+                        intents.send(Intent::OnGoBack.into())?;
                     }
                 }
             }
-            AppEffect::Screen(screen_effect) => screens_run(screen_effect, services, intents).await,
+            AppEffect::Screen(screen_effect) => screens_run(screen_effect, services, intents).await?,
         }
+
+        Ok(())
     }
 }
 

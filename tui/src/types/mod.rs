@@ -12,6 +12,8 @@ use crate::onboard::splash;
 pub(crate) mod menu_iterable;
 pub(crate) mod screen;
 pub(crate) mod screens_macro;
+pub(crate) mod error;
+pub(crate) mod result;
 
 screens!(
     Splash => SplashScreen,
