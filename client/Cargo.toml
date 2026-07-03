@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 derive_more = { version = "2.1.0", default-features = false, features = ["display"] }
 thiserror = { workspace = true }
-serde_json = "1.0"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
 starknet-rust = { workspace = true }
 starknet-rust-core = { workspace = true }

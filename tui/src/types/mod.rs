@@ -7,7 +7,7 @@ use derive_more::From;
 use enum_as_inner::EnumAsInner;
 use starknet_rust_core::chain_id;
 use crate::app::services::OnChainData;
-use crate::app::types::{AccountState, CoreState};
+use crate::app::types::{AccountState, CoreState, ToastsState};
 use crate::onboard::splash;
 
 pub(crate) mod menu_iterable;
@@ -54,7 +54,10 @@ impl AppState {
         Self {
             core: CoreState {
                 account: AccountState::None,
-                toast_queue: VecDeque::new(),
+                toasts: ToastsState {
+                    queue: Default::default(),
+                    current: None,
+                },
                 contract_address: contract_address_string,
                 chain,
                 version: env!("CARGO_PKG_VERSION").to_string(),

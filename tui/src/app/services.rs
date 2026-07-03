@@ -1,9 +1,11 @@
+use crate::app::storage::{StoredAccount, StoredAccountKind, StoredSession};
 use crate::app::types::{AccountKind, LoggedAccount};
+use crate::types::result::Result;
 use starknet_rust_core::types::Felt;
 use starkwaves_client::game::game::Game;
 use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
 use starkwaves_client::types::account::game_account::GameAccount;
-use starkwaves_client::types::result::Result;
+use starkwaves_client::types::cartridge::cli::CartridgeCLI;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -27,7 +29,6 @@ impl Services {
     pub fn cartridge_cli_path() -> Option<PathBuf> {
         const CLI: &str = "controller";
 
-        // 1. On PATH? (`Command::new` searches PATH on unix.)
         let on_path = Command::new(CLI)
             .arg("--version")
             .stdin(Stdio::null())
@@ -40,7 +41,6 @@ impl Services {
             return Some(PathBuf::from(CLI));
         }
 
-        // 2. Custom INSTALL_DIR from install.sh, then 3. its default.
         let candidates = [
             env::var_os("INSTALL_DIR").map(PathBuf::from),
             dirs::home_dir().map(|h| h.join(".local/bin")),
@@ -60,8 +60,40 @@ impl Services {
         }
     }
 
+    pub async fn resolve_session(&self) -> Result<Option<StoredSession>> {
+        let Some(storage_data) = StoredSession::read()? else {
+            return Ok(None);
+        };
+
+        if storage_data.contract_address != self.on_chain.contract_address
+            || storage_data.chain_id != self.on_chain.chain_id
+        {
+            StoredSession::delete()?;
+            return Ok(None);
+        }
+
+        if storage_data.account.kind == StoredAccountKind::Cartridge {
+            if let Some(cli_path) = Self::cartridge_cli_path() {
+                let cli = CartridgeCLI::new(cli_path);
+                let status = cli.status().await?;
+
+                if status.address != storage_data.account.address
+                    || status.chain_id_felt() != storage_data.chain_id
+                {
+                    StoredSession::delete()?;
+                    return Ok(None);
+                }
+            } else {
+                StoredSession::delete()?;
+                return Ok(None);
+            }
+        }
+
+        Ok(Some(storage_data))
+    }
+
     pub async fn resolve_cartridge_account(&self, cli_path: PathBuf) -> Result<LoggedAccount> {
-        CartridgeAccount::resolve(
+        let account = CartridgeAccount::resolve(
             cli_path,
             self.on_chain.contract_address,
             self.on_chain.chain_id,
@@ -76,6 +108,17 @@ impl Services {
             let mut player = self.player.write().unwrap();
             *player = Some(Box::new(cartridge_account));
             logged_account
-        })
+        })?;
+
+        StoredSession::new(
+            self.on_chain.contract_address,
+            self.on_chain.chain_id,
+            StoredAccount {
+                address: account.address,
+                kind: StoredAccountKind::Cartridge,
+            }
+        ).store()?;
+
+        Ok(account)
     }
 }

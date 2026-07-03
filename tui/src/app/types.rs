@@ -7,11 +7,17 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreState {
     pub account: AccountState,
-    pub toast_queue: VecDeque<String>,
+    pub toasts: ToastsState,
     pub contract_address: String,
     pub chain: String,
     pub version: String,
     pub running: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToastsState {
+    pub queue: VecDeque<String>,
+    pub current: Option<String>,
 }
 
 pub enum Effect {

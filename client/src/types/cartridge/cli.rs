@@ -11,6 +11,7 @@ use starknet_rust_core::types::{Call, Felt};
 use starknet_rust_core::utils::{get_selector_from_name, parse_cairo_short_string};
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::vec::IntoIter;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use uuid::Uuid;
@@ -109,23 +110,24 @@ struct ExecuteResult {
 
 pub struct CartridgeCLI {
     path: PathBuf,
-    policies: Vec<PolicyMethod>,
+    logged_policies: Option<Vec<PolicyMethod>>,
 }
 
 impl CartridgeCLI {
-    pub fn new(path: impl Into<PathBuf>, policies: Vec<PolicyMethod>) -> Self {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
         Self {
             path: path.into(),
-            policies,
+            logged_policies: None,
         }
     }
 
     pub async fn auth(
-        &self,
+        &mut self,
         contract_address: Felt,
         chain_id: &Felt,
+        policies: Vec<PolicyMethod>
     ) -> Result<SessionAuthSuccess> {
-        let json = Self::policies_json(contract_address, self.policies.clone());
+        let json = Self::policies_json(contract_address, policies.clone());
         let temp_policies = Self::temp_file("policies", json).await?;
 
         let result: Result<SessionAuthSuccess> = self
@@ -149,7 +151,10 @@ impl CartridgeCLI {
                     }
                 },
             )
-            .await;
+            .await
+            .inspect(|_| {
+                self.logged_policies = Some(policies);
+            });
 
         Self::remove_temp_file(temp_policies).await?;
         result
@@ -357,7 +362,11 @@ impl CartridgeCLI {
     }
 
     fn method_selector(&self, selector: &Felt) -> Option<String> {
-        self.policies
+        let policies = self.logged_policies
+            .clone()
+            .expect("Expected logged policies to be set for a logged in cartridge account.");
+
+        policies
             .iter()
             .find(|p| {
                 let curr_selector = get_selector_from_name(p.entrypoint).unwrap();

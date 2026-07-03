@@ -2,6 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use starknet_rust_core::types::Felt;
 use std::fmt;
 use std::str::FromStr;
+use starknet_rust_core::utils::cairo_short_string_to_felt;
 use url::Url;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,6 +32,12 @@ pub struct SessionStatus {
     pub is_expired: bool,
     pub policies: Vec<ContractPolicyMethod>,
     pub public_key: Felt,
+}
+
+impl SessionStatus {
+    pub fn chain_id_felt(&self) -> Felt {
+        cairo_short_string_to_felt(self.chain_id.as_str()).unwrap()
+    }
 }
 
 /// The `data` object of `session status`: `{ "session": {...} }` when a session

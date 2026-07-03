@@ -17,5 +17,5 @@ pub enum Intent {
 }
 
 pub enum Effect {
-    RequestCheckLoggedAccount
+    RequestResolveStoredSession
 }

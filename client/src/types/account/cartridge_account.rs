@@ -64,7 +64,7 @@ impl CartridgeAccount {
         contract_address: Felt,
         chain_id: Felt,
     ) -> Result<Self> {
-        let cli = CartridgeCLI::new(controller_path.into(), POLICY_METHODS.to_vec());
+        let mut cli = CartridgeCLI::new(controller_path.into());
         let status_result = cli.status().await;
 
         let player_address = match status_result {
@@ -73,7 +73,7 @@ impl CartridgeAccount {
                 match validated_status {
                     Ok(player_address) => player_address,
                     Err(GameError::CartridgeCliError(CartridgeCliError::NoSession)) => {
-                        cli.auth(contract_address, &chain_id).await?;
+                        cli.auth(contract_address, &chain_id, POLICY_METHODS.to_vec()).await?;
                         let status = cli.status().await?;
                         status.address
                     }
@@ -81,7 +81,7 @@ impl CartridgeAccount {
                 }
             }
             Err(GameError::CartridgeCliError(CartridgeCliError::NoSession)) => {
-                cli.auth(contract_address, &chain_id).await?;
+                cli.auth(contract_address, &chain_id, POLICY_METHODS.to_vec()).await?;
                 let status = cli.status().await?;
                 status.address
             }

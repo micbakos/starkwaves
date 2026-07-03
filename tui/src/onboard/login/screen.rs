@@ -1,3 +1,4 @@
+use std::fmt::format;
 use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::onboard::login::types::{CliPopupAction, Effect, Intent, LoginOption, State};
@@ -176,8 +177,12 @@ impl Screen for LoginScreen {
 
                 match logged_account_result {
                     Ok(logged_account) => {
-                        intents.send(OnAccountLoggedIn(logged_account).into())?;
+                        intents.send(OnAccountLoggedIn(logged_account.clone()).into())?;
                         intents.send(Intent::OnCliPopupDismiss.into())?;
+
+                        intents.send(
+                            OnShowToast(format!("Logged in with {} ({:?})", logged_account.address, logged_account.kind)).into()
+                        )?;
                     }
                     Err(error) => {
                         intents.send(OnShowToast(format!("{}", error)).into())?;

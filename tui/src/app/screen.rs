@@ -52,16 +52,21 @@ impl Screen for AppScreen {
                         state.core.account = AccountState::LoggedIn(logged_account);
                     }
                     Intent::OnShowToast(message) => {
-                        let queue_empty = state.core.toast_queue.is_empty();
-                        state.core.toast_queue.push_back(message);
-                        if queue_empty {
-                        effects.push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
+                        if state.core.toasts.current.is_none() {
+                            state.core.toasts.current = Some(message.clone());
+                            effects.push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
+                        } else {
+                            state.core.toasts.queue.push_back(message);
                         }
                     },
                     Intent::OnHideToast => {
-                        state.core.toast_queue.pop_front();
-                        if state.core.toast_queue.front().is_some() {
+                        let queued = state.core.toasts.queue.front();
+
+                        if let Some(message) = queued {
+                            state.core.toasts.current = Some(message.clone());
                             effects.push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
+                        } else {
+                            state.core.toasts.current = None;
                         }
                     }
                 }
@@ -97,7 +102,7 @@ impl Screen for AppScreen {
 
         screens_render(&screen, &state.core, frame, layout[0]);
 
-        if let Some(toast) = state.core.toast_queue.front() {
+        if let Some(toast) = &state.core.toasts.current {
             toast_render(frame, layout[0], toast.clone());
         }
 
