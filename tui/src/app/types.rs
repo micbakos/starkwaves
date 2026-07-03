@@ -1,14 +1,13 @@
-use crate::app::services::OnChainData;
-use crate::onboard::{splash, start};
 use crate::types::ScreenState;
 use enum_as_inner::EnumAsInner;
-use starknet_rust_core::chain_id;
 use starknet_rust_core::types::Felt;
+use std::collections::VecDeque;
+use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreState {
     pub account: AccountState,
-    pub toast: Option<String>,
+    pub toast_queue: VecDeque<String>,
     pub contract_address: String,
     pub chain: String,
     pub version: String,
@@ -19,6 +18,7 @@ pub enum Effect {
     RequestQuit,
     RequestNavigateTo(ScreenState),
     RequestNavigateBack,
+    RequestPopToastAfter(Duration)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
@@ -28,6 +28,7 @@ pub enum Intent {
     OnGoBack,
     OnAccountLoggedIn(LoggedAccount),
     OnShowToast(String),
+    OnHideToast
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]

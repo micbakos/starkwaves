@@ -1,6 +1,7 @@
 use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::onboard::splash::types::{Effect, Intent, State};
+use crate::types::result::Result;
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
 use crossterm::event::KeyEvent;
@@ -10,7 +11,6 @@ use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::types::result::Result;
 
 pub struct SplashScreen {}
 
@@ -48,7 +48,7 @@ impl Screen for SplashScreen {
     async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<()> {
         match effect {
             Effect::RequestCheckLoggedAccount => {
-                // TODO check for active session
+
             }
         }
 

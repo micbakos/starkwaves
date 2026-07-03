@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use crate::onboard::login::screen::LoginScreen;
 use crate::onboard::splash::screen::SplashScreen;
 use crate::onboard::start::screen::StartScreen;
@@ -53,7 +54,7 @@ impl AppState {
         Self {
             core: CoreState {
                 account: AccountState::None,
-                toast: None,
+                toast_queue: VecDeque::new(),
                 contract_address: contract_address_string,
                 chain,
                 version: env!("CARGO_PKG_VERSION").to_string(),
