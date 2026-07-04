@@ -150,21 +150,23 @@ fn render_core_details(frame: &mut Frame, area: Rect, core: &CoreState) {
     let [details_area, version_area] =
         Layout::horizontal([Constraint::Fill(1), Constraint::Min(1)]).areas(area);
 
-    let [contract_area, _, chain_id_area] = Layout::horizontal([
-        Constraint::Min(1),
+    let address_text = Paragraph::new(
+        Line::from(vec![
+            Span::from("Game: "),
+            Span::styled(core.contract_address.as_str(), Style::default().bold()),
+        ])
+    );
+    let [address_area, _, chain_id_area] = Layout::horizontal([
+        Constraint::Length(address_text.line_width() as u16),
         Constraint::Length(2),
-        Constraint::Min(1),
+        Constraint::Length(core.chain.len() as u16),
     ])
     .areas(details_area);
 
     let chain_id_text = Text::raw(core.chain.as_str());
     frame.render_widget(chain_id_text, chain_id_area);
 
-    let version_text = Line::from(vec![
-        Span::from("Game: "),
-        Span::styled(core.contract_address.as_str(), Style::default().bold()),
-    ]);
-    frame.render_widget(version_text, contract_area);
+    frame.render_widget(address_text, address_area);
 
     let version_text = Text::raw(format!("v{}", core.version)).right_aligned();
     frame.render_widget(version_text, version_area);
