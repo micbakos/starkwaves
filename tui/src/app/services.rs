@@ -5,11 +5,10 @@ use starknet_rust_core::types::Felt;
 use starkwaves_client::game::game::Game;
 use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
 use starkwaves_client::types::account::game_account::GameAccount;
-use starkwaves_client::types::cartridge::cli::CartridgeCLI;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +20,7 @@ pub struct OnChainData {
 
 pub struct Services {
     pub on_chain: OnChainData,
-    pub player: RwLock<Option<Box<dyn GameAccount>>>,
+    pub player: RwLock<Option<Arc<dyn GameAccount>>>,
     pub in_game: RwLock<Option<Game>>,
 }
 
@@ -60,7 +59,7 @@ impl Services {
         }
     }
 
-    pub async fn resolve_session(&self) -> Result<Option<StoredSession>> {
+    pub async fn resolve_session(&self) -> Result<Option<LoggedAccount>> {
         let Some(storage_data) = StoredSession::read()? else {
             return Ok(None);
         };
@@ -74,22 +73,32 @@ impl Services {
 
         if storage_data.account.kind == StoredAccountKind::Cartridge {
             if let Some(cli_path) = Self::cartridge_cli_path() {
-                let cli = CartridgeCLI::new(cli_path);
-                let status = cli.status().await?;
+                let account = self.resolve_cartridge_account(cli_path).await?;
 
-                if status.address != storage_data.account.address
-                    || status.chain_id_felt() != storage_data.chain_id
-                {
-                    StoredSession::delete()?;
-                    return Ok(None);
-                }
+                Ok(Some(account))
             } else {
                 StoredSession::delete()?;
-                return Ok(None);
+                Ok(None)
             }
+        } else {
+            // TODO other kinds of accounts?
+            Ok(None)
         }
+    }
 
-        Ok(Some(storage_data))
+    pub async fn remove_session(&self) -> Result<()> {
+        let player = {
+            let mut guard = self.player.write().unwrap();
+            guard.take()
+        };
+
+        if let Some(player) = player {
+            player.disconnect().await?;
+        }
+        
+        StoredSession::delete()?;
+
+        Ok(())
     }
 
     pub async fn resolve_cartridge_account(&self, cli_path: PathBuf) -> Result<LoggedAccount> {
@@ -102,11 +111,12 @@ impl Services {
         .map(|cartridge_account| {
             let logged_account = LoggedAccount {
                 address: cartridge_account.address(),
+                username: cartridge_account.username.clone(),
                 kind: AccountKind::Cartridge,
             };
 
             let mut player = self.player.write().unwrap();
-            *player = Some(Box::new(cartridge_account));
+            *player = Some(Arc::new(cartridge_account));
             logged_account
         })?;
 
@@ -114,7 +124,8 @@ impl Services {
             self.on_chain.contract_address,
             self.on_chain.chain_id,
             StoredAccount {
-                address: account.address,
+                address: account.address.clone(),
+                username: account.username.clone(),
                 kind: StoredAccountKind::Cartridge,
             }
         ).store()?;

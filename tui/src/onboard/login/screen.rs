@@ -2,6 +2,7 @@ use std::fmt::format;
 use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::onboard::login::types::{CliPopupAction, Effect, Intent, LoginOption, State};
+use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
 use crossterm::event::{KeyCode, KeyEvent};
@@ -12,8 +13,10 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 use std::sync::Arc;
 use strum::VariantArray;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::types::Intent::{OnAccountLoggedIn, OnShowToast};
+use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
+use crate::lobby::types::Intent::OnStart;
 use crate::types::result::Result;
 
 pub struct LoginScreen {}
@@ -169,7 +172,7 @@ impl Screen for LoginScreen {
         effect: Self::Effect,
         services: Arc<Services>,
         intents: UnboundedSender<AppIntent>,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), SendError<AppIntent>> {
         match effect {
             Effect::RequestLoginWithCartridge(cli_path) => {
                 let logged_account_result = services.resolve_cartridge_account(cli_path)
@@ -180,9 +183,9 @@ impl Screen for LoginScreen {
                         intents.send(OnAccountLoggedIn(logged_account.clone()).into())?;
                         intents.send(Intent::OnCliPopupDismiss.into())?;
 
-                        intents.send(
-                            OnShowToast(format!("Logged in with {} ({:?})", logged_account.address, logged_account.kind)).into()
-                        )?;
+                        let lobby_state = crate::lobby::types::State::new(logged_account);
+                        intents.send(OnNav(NavCommand::ResetTo(lobby_state.into())).into())?;
+                        intents.send(OnStart.into())?;
                     }
                     Err(error) => {
                         intents.send(OnShowToast(format!("{}", error)).into())?;

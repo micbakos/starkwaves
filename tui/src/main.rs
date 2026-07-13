@@ -1,6 +1,8 @@
 mod app;
 mod onboard;
+mod lobby;
 mod types;
+mod utils;
 
 use crate::app::screen::AppScreen;
 use crate::app::services::{OnChainData, Services};
@@ -132,7 +134,7 @@ fn observe_keys(
 
                 let top_screen = current_state
                     .screens
-                    .first()
+                    .front()
                     .expect("Received key but screen should exist")
                     .clone();
 

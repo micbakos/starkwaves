@@ -1,6 +1,9 @@
+use cainome::parser::AbiParser;
+use cainome::parser::tokens::Token;
 use cainome::rs::{Abigen, ExecutionVersion};
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -8,7 +11,6 @@ const BUILD_RELEASE: bool = false;
 
 fn main() {
     let scarb_check = Command::new("scarb").arg("--version").output();
-
     if scarb_check.is_err() {
         println!("cargo:warning=Scarb not found. Please install Scarb to compile Cairo code.");
         println!("cargo:warning=Visit: https://docs.swmansion.com/scarb/download");
@@ -28,8 +30,8 @@ fn main() {
         );
     }
 
-    println!("cargo:rerun-if-changed=../contract/src/");
-    println!("cargo:rerun-if-changed=../contract/Scarb.toml");
+    // println!("cargo:rerun-if-changed=../contract/src/");
+    // println!("cargo:rerun-if-changed=../contract/Scarb.toml");
 
     let contract_dir = Path::new("../contract");
     let mut scarb_args: Vec<&str> = vec![];
@@ -88,6 +90,9 @@ fn main() {
             fs::write(&mod_rs_path, new_contents).expect("Failed to write to mod.rs");
         }
     }
+
+    let known_methods_file = output_dir.join("methods.rs");
+    write_known_methods(contract, known_methods_file);
 }
 
 #[cfg(feature = "merkle-build")]
@@ -138,4 +143,42 @@ fn find_json_file(dir: &Path, file_name: &str) -> Option<PathBuf> {
     }
 
     None
+}
+
+fn write_known_methods(contract_abi: PathBuf, target: PathBuf) {
+    let abi = fs::read_to_string(contract_abi).expect("Failed to read contract path");
+    let aliases = HashMap::new();
+    let methods = AbiParser::tokens_from_abi_string(&abi, &aliases)
+        .expect("Failed to parse contract abi")
+        .interfaces
+        .iter()
+        .flat_map(|(name, tokens)| {
+            println!("cargo:warning=Interface name: {}", name);
+            if name.ends_with("IStarkwaves") {
+                tokens
+                    .iter()
+                    .filter_map(|token| {
+                        if let Token::Function(function) = token {
+                            Some(function.name.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<String>>()
+            } else {
+                vec![]
+            }
+        })
+        .collect::<Vec<String>>();
+
+    let mut out = Vec::new();
+    writeln!(out, r#"// @generated - do not edit"#).unwrap();
+    writeln!(out, "pub const STARKWAVES_METHOD_SELECTORS: &[&str] = &[").unwrap();
+    methods.iter().for_each(|m| {
+        writeln!(out, "    \"{}\",", m).unwrap();
+    });
+    writeln!(out, "];").unwrap();
+
+    fs::write(&target, &out)
+        .expect(format!("Couldn't write to {}", target.to_str().unwrap()).as_str());
 }

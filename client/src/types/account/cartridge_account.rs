@@ -8,11 +8,15 @@ use async_trait::async_trait;
 use starknet_rust::providers::JsonRpcClient;
 use starknet_rust::providers::jsonrpc::HttpTransport;
 use starknet_rust_core::chain_id;
-use starknet_rust_core::types::{Call, Felt, TransactionReceiptWithBlockInfo};
-use std::collections::HashSet;
+use starknet_rust_core::types::{BlockId, Call, Felt, FunctionCall, TransactionReceiptWithBlockInfo};
+use std::collections::{HashMap, HashSet};
 use std::convert::Into;
 use std::path::PathBuf;
+use std::sync::Arc;
+use starknet_rust::macros::selector;
+use starknet_rust_core::utils::get_selector_from_name;
 use url::Url;
+use crate::types::contract::methods::STARKWAVES_METHOD_SELECTORS;
 
 const POLICY_METHODS: [PolicyMethod; 6] = [
     PolicyMethod::new(
@@ -55,7 +59,7 @@ pub struct CartridgeAccount {
     /// The controller account address (from the registered session).
     address: Felt,
     /// The username of this account (from the registered session).
-    username: String,
+    pub username: String,
 }
 
 impl CartridgeAccount {
@@ -64,7 +68,11 @@ impl CartridgeAccount {
         contract_address: Felt,
         chain_id: Felt,
     ) -> Result<Self> {
-        let mut cli = CartridgeCLI::new(controller_path.into());
+        let known_methods = STARKWAVES_METHOD_SELECTORS.iter().map(|m| {
+            (get_selector_from_name(m).unwrap(), m.to_string())
+        }).collect();
+        
+        let cli = CartridgeCLI::new(controller_path.into(), known_methods);
         let status_result = cli.status().await;
 
         let player_address = match status_result {
@@ -95,11 +103,6 @@ impl CartridgeAccount {
             chain_id,
             username,
         })
-    }
-
-    /// Consumes the account and wipes the local Cartridge session data.
-    pub async fn logout(self) -> Result<()> {
-        self.cli.clear().await
     }
 
     async fn status_validated(status: &SessionStatus, contract_address: Felt) -> Result<Felt> {
@@ -150,6 +153,16 @@ impl CartridgeAccount {
 impl GameAccount for CartridgeAccount {
     fn address(&self) -> Felt {
         self.address
+    }
+
+    async fn disconnect(self: Arc<Self>) -> Result<()> {
+        self.cli.clear().await
+    }
+
+    async fn call(&self, call: FunctionCall, block_id: BlockId) -> Result<Vec<Felt>> {
+        let calls = self.cli.call(vec![call], block_id).await?;
+
+        Ok(calls.first().unwrap().to_owned())
     }
 
     async fn send(&self, calls: Vec<Call>) -> Result<Felt> {

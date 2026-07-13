@@ -1,7 +1,9 @@
 use std::sync::Arc;
+use crate::app::types::Effect::RequestNav;
 use crate::onboard::start::types::{Effect, Intent, Menu, State};
 use crate::types::AppEffect;
 use crate::types::AppIntent;
+use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
@@ -10,9 +12,9 @@ use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use strum::VariantArray;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
 use crate::app::services::Services;
-use crate::types::result::Result;
 
 pub struct StartScreen;
 
@@ -36,12 +38,7 @@ impl Screen for StartScreen {
                     Menu::Start => {
                         if core.account.is_none() {
                             let login_screen_state = crate::login::types::State::new();
-                            effects.push(
-                                crate::app::types::Effect::RequestNavigateTo(
-                                    login_screen_state.into(),
-                                )
-                                .into(),
-                            )
+                            effects.push(RequestNav(NavCommand::Push(login_screen_state.into())).into())
                         } else {
                             // Open lobby
                         }
@@ -102,7 +99,11 @@ impl Screen for StartScreen {
         }
     }
 
-    async fn run(_effect: Self::Effect, services: Arc<Services>, _intents: UnboundedSender<AppIntent>) -> Result<()> {
+    async fn run(
+        _effect: Self::Effect,
+        services: Arc<Services>,
+        _intents: UnboundedSender<AppIntent>
+    ) -> std::result::Result<(), SendError<AppIntent>> {
         Ok(())
     }
 }

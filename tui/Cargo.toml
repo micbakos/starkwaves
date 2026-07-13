@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 directories = "6.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
+clipboard-rs = "0.3.5"
 
 [[bin]]
 name = "starkwaves-tui"

@@ -4,9 +4,8 @@ use crate::types::result::Result;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use starknet_rust_core::types::Felt;
-use std::fs::{create_dir, remove_file, File};
+use std::fs::{File, create_dir, remove_file};
 use std::io::{BufReader, ErrorKind, Write};
-use log::log;
 
 const DATA_FILE: &str = "data.json";
 
@@ -84,6 +83,7 @@ impl StoredSession {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StoredAccount {
     pub address: Felt,
+    pub username: String,
     pub kind: StoredAccountKind,
 }
 
@@ -91,6 +91,7 @@ impl Into<LoggedAccount> for StoredAccount {
     fn into(self) -> LoggedAccount {
         LoggedAccount {
             address: self.address,
+            username: self.username,
             kind: self.kind.into(),
         }
     }

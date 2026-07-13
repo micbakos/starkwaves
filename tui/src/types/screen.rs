@@ -6,9 +6,9 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
 use crate::app::services::Services;
-use crate::types::result::Result;
 
 pub trait Screen {
     type Intent;
@@ -26,5 +26,5 @@ pub trait Screen {
 
     fn on_key(key: KeyEvent, state: &Self::State) -> Option<Self::Intent>;
 
-    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<()>;
+    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<(), SendError<AppIntent>>;
 }

@@ -26,6 +26,22 @@ macro_rules! screens {
             )+
         }
 
+        impl ScreenState {
+            pub fn kind(&self) -> ScreenKind {
+                match self {
+                    $( ScreenState::$screen_name(_) => ScreenKind::$screen_name, )+
+                }
+            }
+        }
+
+        #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner, derive_more::Display)]
+        pub enum ScreenKind {
+            $(
+                #[display("{} screen", stringify!($screen_name))]
+                $screen_name,
+             )+
+        }
+
         #[derive(derive_more::From)]
         pub enum ScreenEffect {
             $(
@@ -84,7 +100,7 @@ macro_rules! screens {
             effect: ScreenEffect,
             services: std::sync::Arc<crate::app::services::Services>,
             intents: tokio::sync::mpsc::UnboundedSender<AppIntent>
-        ) -> crate::types::result::Result<()> {
+        ) -> Result<(), tokio::sync::mpsc::error::SendError<AppIntent>> {
             match effect {
                 $(
                     ScreenEffect::$screen_name(effect) => <$screen_path as crate::types::screen::Screen>::run(

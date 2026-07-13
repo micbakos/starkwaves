@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// Represents different types of ships in the game
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum ShipKind {
     #[display("Super Carrier")]
     SuperCarrier, // Size 6

@@ -1,7 +1,7 @@
 use crate::app::services::Services;
 use crate::app::types::{CoreState, LoggedAccount};
 use crate::onboard::splash::types::{Effect, Intent, State};
-use crate::types::result::Result;
+use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
 use crossterm::event::KeyEvent;
@@ -10,8 +10,11 @@ use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
 use std::sync::Arc;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::types::Intent::{OnAccountLoggedIn, OnShowToast};
+use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
+use crate::lobby::screen::LobbyScreen;
+use crate::lobby::types::Intent::OnStart;
 
 pub struct SplashScreen {}
 
@@ -54,21 +57,22 @@ impl Screen for SplashScreen {
         effect: Self::Effect,
         services: Arc<Services>,
         intents: UnboundedSender<AppIntent>,
-    ) -> Result<()> {
+    ) -> Result<(), SendError<AppIntent>> {
         match effect {
             Effect::RequestResolveStoredSession => {
-                let session = services.resolve_session().await?;
+                let result = services.resolve_session().await;
 
-                if let Some(session) = session {
-                    let logged_account: LoggedAccount = session.account.into();
-                    intents.send(OnAccountLoggedIn(logged_account.clone()).into())?;
+                if let Ok(Some(account)) = result {
+                    intents.send(OnAccountLoggedIn(account.clone()).into())?;
 
-                    intents.send(
-                        OnShowToast(format!("Logged in with {} ({:?})", logged_account.address, logged_account.kind)).into()
-                    )?;
+                    let lobby_state = crate::lobby::types::State::new(account);
+                    intents.send(OnNav(NavCommand::Replace(lobby_state.into())).into())?;
+                    intents.send(OnStart.into())?;
+                } else if let Err(err) = result {
+                    intents.send(OnShowToast(err.to_string()).into())?;
                 } else {
                     let screen = crate::onboard::start::types::State::new();
-                    intents.send(crate::app::types::Intent::OnOpen(screen.into()).into())?;
+                    intents.send(OnNav(NavCommand::Replace(screen.into())).into())?;
                 }
             }
         }

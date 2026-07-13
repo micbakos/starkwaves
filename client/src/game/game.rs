@@ -1,5 +1,6 @@
 use crate::types::account::game_account::GameAccount;
 use crate::types::board_size::BoardSize;
+use crate::types::contract::generated;
 use crate::types::contract::generated::Event;
 use crate::types::contract::mappings::{IntoEvents, in_game_event_keys, in_lobby_event_keys};
 use crate::types::contract::starkwaves::Starkwaves;
@@ -7,14 +8,18 @@ use crate::types::error::GameError;
 use crate::types::fire_report::FireReport;
 use crate::types::game_over_outcome::GameOverOutcome;
 use crate::types::game_state::{GameData, GameState, InGameState, PlayTurn};
+use crate::types::lobby::Lobbies;
 use crate::types::result::Result;
 use crate::types::{Board, Ship, ShipKind};
 use async_trait::async_trait;
-use cainome::cairo_serde::ContractAddress;
+use cainome::cairo_serde::{CairoSerde, ContractAddress};
 use log::info;
 use starknet_rust::core::types::Felt;
-use starknet_rust_core::types::{AddressFilter, ConfirmedBlockId, L2TransactionFinalityStatus};
+use starknet_rust_core::types::{
+    AddressFilter, BlockId, BlockTag, ConfirmedBlockId, L2TransactionFinalityStatus,
+};
 use starknet_rust_tokio_tungstenite::{EventSubscriptionOptions, EventsUpdate, TungsteniteStream};
+use std::any::type_name;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -80,6 +85,26 @@ pub struct Game {
 }
 
 impl Game {
+    pub async fn get_lobbies(
+        contract_address: Felt,
+        player: &dyn GameAccount,
+    ) -> Result<Lobbies> {
+        let contract = Starkwaves::new(contract_address);
+        let result = player
+            .call(contract.get_lobbies(), BlockId::Tag(BlockTag::Latest))
+            .await?;
+
+        let generated_lobbies =
+            generated::Lobbies::cairo_deserialize(&result, 0).map_err(|_| {
+                GameError::DeserializationError(
+                    type_name::<generated::Lobbies>().to_string(),
+                    result,
+                )
+            })?;
+
+        Ok(generated_lobbies.into())
+    }
+
     pub fn player_address(&self) -> ContractAddress {
         self.player.address().into()
     }

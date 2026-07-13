@@ -1,4 +1,5 @@
 use crate::types::ScreenState;
+use crate::types::nav::NavCommand;
 use enum_as_inner::EnumAsInner;
 use starknet_rust_core::types::Felt;
 use std::collections::VecDeque;
@@ -22,16 +23,14 @@ pub struct ToastsState {
 
 pub enum Effect {
     RequestQuit,
-    RequestNavigateTo(ScreenState),
-    RequestNavigateBack,
+    RequestNav(NavCommand),
     RequestPopToastAfter(Duration)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum Intent {
     OnQuit,
-    OnOpen(ScreenState),
-    OnGoBack,
+    OnNav(NavCommand),
     OnAccountLoggedIn(LoggedAccount),
     OnShowToast(String),
     OnHideToast
@@ -46,6 +45,7 @@ pub enum AccountState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoggedAccount {
     pub address: Felt,
+    pub username: String,
     pub kind: AccountKind,
 }
 
@@ -54,3 +54,5 @@ pub enum AccountKind {
     Local,
     Cartridge,
 }
+
+

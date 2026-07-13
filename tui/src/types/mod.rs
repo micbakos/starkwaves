@@ -8,6 +8,7 @@ use enum_as_inner::EnumAsInner;
 use starknet_rust_core::chain_id;
 use crate::app::services::OnChainData;
 use crate::app::types::{AccountState, CoreState, ToastsState};
+use crate::lobby::screen::LobbyScreen;
 use crate::onboard::splash;
 
 pub(crate) mod menu_iterable;
@@ -15,11 +16,13 @@ pub(crate) mod screen;
 pub(crate) mod screens_macro;
 pub(crate) mod error;
 pub(crate) mod result;
+pub(crate) mod nav;
 
 screens!(
     Splash => SplashScreen,
     Start => StartScreen,
-    Login => LoginScreen
+    Login => LoginScreen,
+    Lobby => LobbyScreen
 );
 
 #[derive(From)]
@@ -37,7 +40,7 @@ pub enum AppIntent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppState {
     pub core: CoreState,
-    pub screens: Vec<ScreenState>,
+    pub screens: VecDeque<ScreenState>,
 }
 
 impl AppState {
@@ -63,7 +66,7 @@ impl AppState {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 running: true,
             },
-            screens: vec![splash::types::State::new().into()],
+            screens: VecDeque::from_iter([splash::types::State::new().into()]),
         }
     }
 }

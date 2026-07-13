@@ -1,10 +1,11 @@
 pub mod board;
 pub mod fire;
+pub mod lobby;
 pub mod outcome;
 pub mod phase;
 pub mod ship;
-
 pub use board::{AllBoardSizesTrait, BoardSize, BoardSizeTrait, LargerBoardSize, SmallerBoardSize};
 pub use fire::{FireStatus, FireStatusTrait, HitReport};
+pub use lobby::{Lobbies, Lobby};
 pub use outcome::{Outcome, OutcomeBeforeReveal, OutcomeBeforeRevealTrait, RevealStatus};
 pub use ship::{Orientation, Ship, ShipKind, ShipKindTrait};

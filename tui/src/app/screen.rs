@@ -1,6 +1,7 @@
 use crate::app::services::Services;
+use crate::app::types::Intent::OnNav;
 use crate::app::types::{AccountState, CoreState, Effect, Intent};
-use crate::types::result::Result;
+use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crate::types::{
     AppEffect, AppIntent, AppState, screens_reduce, screens_render,
@@ -14,6 +15,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::sleep;
 
@@ -38,15 +40,8 @@ impl Screen for AppScreen {
                     Intent::OnQuit => {
                         state.core.running = false;
                     }
-                    Intent::OnOpen(screen_state) => {
-                        state.screens.insert(0, screen_state);
-                    }
-                    Intent::OnGoBack => {
-                        if state.screens.len() > 1 {
-                            state.screens.remove(0);
-                        } else {
-                            state.core.running = false;
-                        }
+                    Intent::OnNav(command) => {
+                        command.handle(&mut state);
                     }
                     Intent::OnAccountLoggedIn(logged_account) => {
                         state.core.account = AccountState::LoggedIn(logged_account);
@@ -79,7 +74,7 @@ impl Screen for AppScreen {
 
                 let top_screen_state = state
                     .screens
-                    .first()
+                    .front()
                     .expect("Received intent but no screen exists in stack.");
 
                 let (new_screen_state, effects) =
@@ -98,7 +93,7 @@ impl Screen for AppScreen {
             .constraints([Constraint::Percentage(100), Constraint::Length(1)])
             .split(frame.area());
 
-        let screen = state.screens.first().expect("No screen exists to render");
+        let screen = state.screens.front().expect("No screen exists to render");
 
         screens_render(&screen, &state.core, frame, layout[0]);
 
@@ -111,7 +106,7 @@ impl Screen for AppScreen {
 
     fn on_key(key: KeyEvent, _state: &Self::State) -> Option<Self::Intent> {
         match key.code {
-            KeyCode::Esc => Some(Intent::OnGoBack.into()),
+            KeyCode::Esc => Some(OnNav(NavCommand::Pop).into()),
             _ => None,
         }
     }
@@ -120,17 +115,14 @@ impl Screen for AppScreen {
         effect: Self::Effect,
         services: Arc<Services>,
         intents: UnboundedSender<AppIntent>,
-    ) -> Result<()> {
+    ) -> Result<(), SendError<AppIntent>> {
         match effect {
             AppEffect::App(effect) => match effect {
                 Effect::RequestQuit => {
                     intents.send(Intent::OnQuit.into())?;
                 }
-                Effect::RequestNavigateTo(screen_state) => {
-                    intents.send(Intent::OnOpen(screen_state).into())?;
-                }
-                Effect::RequestNavigateBack => {
-                    intents.send(Intent::OnGoBack.into())?;
+                Effect::RequestNav(command) => {
+                    intents.send(Intent::OnNav(command).into())?;
                 }
                 Effect::RequestPopToastAfter(duration) => {
                     sleep(duration).await;

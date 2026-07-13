@@ -4,7 +4,7 @@ use crate::types::contract::generated;
 use crate::types::fire_report::{FireReport, FireStatus};
 use cainome::cairo_serde::CairoSerde;
 use starknet_rust::macros::selector;
-use starknet_rust_core::types::{Call, Felt};
+use starknet_rust_core::types::{Call, Felt, FunctionCall};
 
 pub struct Starkwaves {
     address: Felt,
@@ -13,6 +13,14 @@ pub struct Starkwaves {
 impl Starkwaves {
     pub fn new(address: Felt) -> Self {
         Self { address }
+    }
+
+    pub fn get_lobbies(&self) -> FunctionCall {
+        FunctionCall {
+            contract_address: self.address,
+            entry_point_selector: selector!("get_lobbies"),
+            calldata: vec![],
+        }
     }
 
     pub fn request_start_game(&self, board_size: &BoardSize) -> Call {

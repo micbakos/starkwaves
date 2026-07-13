@@ -1,9 +1,8 @@
 use crate::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
 use crate::types::contract::generated;
-use crate::types::contract::generated::{
-    Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind,
-};
+use crate::types::contract::generated::{Event, Orientation as ContractOrientation, Ship as ContractShip, ShipKind as ContractShipKind};
 use crate::types::error::GameError;
+use crate::types::lobby::Lobbies;
 use crate::types::{Orientation, Ship, ShipKind};
 use starknet_rust::core::types::TransactionReceipt;
 use starknet_rust::core::types::{Event as StarknetEvent, Felt};
@@ -132,6 +131,14 @@ impl From<generated::LargerBoardSize> for LargerBoardSize {
             generated::LargerBoardSize::FourteenByFourteen => LargerBoardSize::FourteenByFourteen,
             generated::LargerBoardSize::TwentyByTwenty => LargerBoardSize::TwentyByTwenty,
         }
+    }
+}
+
+impl From<generated::Lobbies> for Lobbies {
+    fn from(value: generated::Lobbies) -> Self {
+        Self::new(value.waitlist.into_iter().map(|lobby| {
+            (lobby.size.into(), lobby.player)
+        }).collect())
     }
 }
 

@@ -6,12 +6,12 @@ use crate::types::result::Result;
 use log::{error, info};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use starknet_rust_core::types::{Call, Felt};
-use starknet_rust_core::utils::{get_selector_from_name, parse_cairo_short_string};
+use serde_json::{Value, json};
+use starknet_rust_core::types::{BlockId, BlockTag, Call, Felt, FunctionCall};
+use starknet_rust_core::utils::parse_cairo_short_string;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::vec::IntoIter;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use uuid::Uuid;
@@ -108,21 +108,42 @@ struct ExecuteResult {
     transaction_hash: Felt,
 }
 
+/// `controller call --file` payload: one entry per requested call. The top-level
+/// event stays `success` even when an individual call reverts, so `success`/`error`
+/// must be inspected per call.
+#[derive(Deserialize)]
+struct CallResults {
+    calls: Vec<CallOutcome>,
+}
+
+#[derive(Deserialize)]
+struct CallOutcome {
+    entrypoint: String,
+    #[serde(default)]
+    result: Vec<Felt>,
+    success: bool,
+    #[serde(default)]
+    error: Option<String>,
+}
+
 pub struct CartridgeCLI {
     path: PathBuf,
-    logged_policies: Option<Vec<PolicyMethod>>,
+    known_methods: HashMap<Felt, String>,
 }
 
 impl CartridgeCLI {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        path: impl Into<PathBuf>,
+        known_methods: Vec<(Felt, String)>
+    ) -> Self {
         Self {
             path: path.into(),
-            logged_policies: None,
+            known_methods: known_methods.into_iter().collect(),
         }
     }
 
     pub async fn auth(
-        &mut self,
+        &self,
         contract_address: Felt,
         chain_id: &Felt,
         policies: Vec<PolicyMethod>
@@ -151,10 +172,7 @@ impl CartridgeCLI {
                     }
                 },
             )
-            .await
-            .inspect(|_| {
-                self.logged_policies = Some(policies);
-            });
+            .await;
 
         Self::remove_temp_file(temp_policies).await?;
         result
@@ -181,7 +199,7 @@ impl CartridgeCLI {
     pub async fn execute(&self, calls: Vec<Call>) -> Result<Felt> {
         let specs = calls
             .iter()
-            .map(|call| self.call_spec(call))
+            .map(|call| self.call_to_call_spec(call))
             .collect::<Result<Vec<_>>>()?;
 
         let json = serde_json::to_string(&CallFile { calls: specs }).map_err(|e| {
@@ -199,10 +217,71 @@ impl CartridgeCLI {
         Ok(result?.transaction_hash)
     }
 
+    pub async fn call(
+        &self,
+        calls: Vec<FunctionCall>,
+        block_id: BlockId,
+    ) -> Result<Vec<Vec<Felt>>> {
+        if let BlockId::Tag(tag) = block_id &&
+            (tag == BlockTag::PreConfirmed || tag == BlockTag::L1Accepted)
+        {
+            return Err(GameError::CartridgeCliError(CartridgeCliError::CliError(
+                format!("Block tag {:?} not supported", tag).to_string(),
+            )));
+        }
+
+        let block_id_str = match block_id {
+            BlockId::Hash(felt) => felt.to_fixed_hex_string(),
+            BlockId::Number(num) => num.to_string(),
+            BlockId::Tag(tag) => {
+                if tag == BlockTag::PreConfirmed || tag == BlockTag::L1Accepted {
+                    return Err(GameError::CartridgeCliError(CartridgeCliError::CliError(
+                        format!("Block tag {:?} not supported", tag).to_string(),
+                    )));
+                }
+
+                "latest".to_string()
+            }
+        };
+
+        let specs = calls
+            .iter()
+            .map(|call| self.function_call_to_call_spec(call))
+            .collect::<Result<Vec<_>>>()?;
+
+        let json = serde_json::to_string(&CallFile { calls: specs }).map_err(|e| {
+            GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
+                "Failed to serialize calls: {e}"
+            )))
+        })?;
+        let temp_calls = Self::temp_file("calls", json).await?;
+
+        let result: Result<CallResults> = self
+            .run_cli(&["call", "--file", temp_calls.to_string_lossy().as_ref(), "--block-id", block_id_str.as_str()])
+            .await;
+
+        Self::remove_temp_file(temp_calls).await?;
+
+        let outcomes = result?.calls;
+
+        // A reverted call is reported per entry, not as a top-level error.
+        if let Some(failed) = outcomes.iter().find(|c| !c.success) {
+            let message = failed
+                .error
+                .clone()
+                .unwrap_or_else(|| format!("call to `{}` reverted", failed.entrypoint));
+            return Err(GameError::CartridgeCliError(CartridgeCliError::CliError(
+                message,
+            )));
+        }
+
+        Ok(outcomes.into_iter().map(|c| c.result).collect())
+    }
+
     /// Converts a [`Call`] into the CLI's [`CallSpec`], resolving the selector
     /// back to its entrypoint name via `method_selectors` (filled at `auth`).
-    fn call_spec(&self, call: &Call) -> Result<CallSpec> {
-        let entrypoint = self.method_selector(&call.selector).ok_or_else(|| {
+    fn call_to_call_spec(&self, call: &Call) -> Result<CallSpec> {
+        let entrypoint = self.known_methods.get(&call.selector).ok_or_else(|| {
             GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
                 "no entrypoint name known for selector {}",
                 call.selector.to_hex_string()
@@ -211,6 +290,26 @@ impl CartridgeCLI {
 
         Ok(CallSpec {
             contract_address: call.to.to_hex_string(),
+            entrypoint: entrypoint.clone(),
+            calldata: call.calldata.iter().map(Felt::to_hex_string).collect(),
+        })
+    }
+
+    /// Converts a [`FunctionCall`] into the CLI's [`CallSpec`], resolving the selector
+    /// back to its entrypoint name via `method_selectors` (filled at `auth`).
+    fn function_call_to_call_spec(&self, call: &FunctionCall) -> Result<CallSpec> {
+        let entrypoint = self
+            .known_methods
+            .get(&call.entry_point_selector)
+            .ok_or_else(|| {
+                GameError::CartridgeCliError(CartridgeCliError::CliError(format!(
+                    "no entrypoint name known for selector {}",
+                    call.entry_point_selector.to_hex_string()
+                )))
+            })?;
+
+        Ok(CallSpec {
+            contract_address: call.contract_address.to_hex_string(),
             entrypoint: entrypoint.clone(),
             calldata: call.calldata.iter().map(Felt::to_hex_string).collect(),
         })
@@ -358,21 +457,6 @@ impl CartridgeCLI {
                 }
             }
         })
-        .to_string()
-    }
-
-    fn method_selector(&self, selector: &Felt) -> Option<String> {
-        let policies = self.logged_policies
-            .clone()
-            .expect("Expected logged policies to be set for a logged in cartridge account.");
-
-        policies
-            .iter()
-            .find(|p| {
-                let curr_selector = get_selector_from_name(p.entrypoint).unwrap();
-
-                return curr_selector == *selector;
-            })
-            .map(|p| p.entrypoint.to_string())
+            .to_string()
     }
 }

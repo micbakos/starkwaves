@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
 pub use starknet_rust::core::codec::Error as CodecError;
+use starknet_rust_core::types::Felt;
 use starknet_rust_tokio_tungstenite::{SubscribeError, SubscriptionReceiveError};
 
 #[derive(Debug, ThisError)]
@@ -82,6 +83,9 @@ pub enum GameError {
 
     #[error("Contract state was reset.")]
     ContractReset,
+
+    #[error("Could not deserialize type `{}` from {}", 0, serde_json::to_string(&1).unwrap())]
+    DeserializationError(String, Vec<Felt>),
 }
 
 #[derive(Debug, ThisError)]

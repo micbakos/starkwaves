@@ -435,6 +435,77 @@ impl GameStartedEvent {
     }
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Lobbies {
+    pub waitlist: Vec<Lobby>,
+}
+impl cainome::cairo_serde::CairoSerde for Lobbies {
+    type RustType = Self;
+    const SERIALIZED_SIZE: std::option::Option<usize> = None;
+    #[inline]
+    fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
+        let mut __size = 0;
+        __size += Vec::<Lobby>::cairo_serialized_size(&__rust.waitlist);
+        __size
+    }
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out.extend(Vec::<Lobby>::cairo_serialize(&__rust.waitlist));
+        __out
+    }
+    fn cairo_deserialize(
+        __felts: &[starknet_rust::core::types::Felt],
+        __offset: usize,
+    ) -> cainome::cairo_serde::Result<Self::RustType> {
+        let mut __offset = __offset;
+        let waitlist = Vec::<Lobby>::cairo_deserialize(__felts, __offset)?;
+        __offset += Vec::<Lobby>::cairo_serialized_size(&waitlist);
+        Ok(Lobbies { waitlist })
+    }
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Lobby {
+    pub player: cainome::cairo_serde::ContractAddress,
+    pub size: BoardSize,
+}
+impl cainome::cairo_serde::CairoSerde for Lobby {
+    type RustType = Self;
+    const SERIALIZED_SIZE: std::option::Option<usize> = None;
+    #[inline]
+    fn cairo_serialized_size(__rust: &Self::RustType) -> usize {
+        let mut __size = 0;
+        __size
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(
+                &__rust.player,
+            );
+        __size += BoardSize::cairo_serialized_size(&__rust.size);
+        __size
+    }
+    fn cairo_serialize(__rust: &Self::RustType) -> Vec<starknet_rust::core::types::Felt> {
+        let mut __out: Vec<starknet_rust::core::types::Felt> = vec![];
+        __out
+            .extend(
+                cainome::cairo_serde::ContractAddress::cairo_serialize(&__rust.player),
+            );
+        __out.extend(BoardSize::cairo_serialize(&__rust.size));
+        __out
+    }
+    fn cairo_deserialize(
+        __felts: &[starknet_rust::core::types::Felt],
+        __offset: usize,
+    ) -> cainome::cairo_serde::Result<Self::RustType> {
+        let mut __offset = __offset;
+        let player = cainome::cairo_serde::ContractAddress::cairo_deserialize(
+            __felts,
+            __offset,
+        )?;
+        __offset
+            += cainome::cairo_serde::ContractAddress::cairo_serialized_size(&player);
+        let size = BoardSize::cairo_deserialize(__felts, __offset)?;
+        __offset += BoardSize::cairo_serialized_size(&size);
+        Ok(Lobby { player, size })
+    }
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OwnershipTransferStarted {
     pub previous_owner: cainome::cairo_serde::ContractAddress,
     pub new_owner: cainome::cairo_serde::ContractAddress,
@@ -3134,6 +3205,20 @@ impl cainome::cairo_serde::CairoSerde for SmallerBoardSize {
 impl<A: starknet_rust::accounts::ConnectedAccount + Sync> StarkwavesGenerated<A> {
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
+    pub fn get_lobbies(
+        &self,
+    ) -> cainome::cairo_serde::call::FCall<A::Provider, Lobbies> {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        let __call = starknet_rust::core::types::FunctionCall {
+            contract_address: self.address,
+            entry_point_selector: starknet_rust::macros::selector!("get_lobbies"),
+            calldata: __calldata,
+        };
+        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+    }
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
     pub fn get_next_game_id(
         &self,
     ) -> cainome::cairo_serde::call::FCall<A::Provider, starknet_rust::core::types::Felt> {
@@ -3472,6 +3557,18 @@ impl<A: starknet_rust::accounts::ConnectedAccount + Sync> StarkwavesGenerated<A>
     }
 }
 impl<P: starknet_rust::providers::Provider + Sync> StarkwavesGeneratedReader<P> {
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_lobbies(&self) -> cainome::cairo_serde::call::FCall<P, Lobbies> {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        let __call = starknet_rust::core::types::FunctionCall {
+            contract_address: self.address,
+            entry_point_selector: starknet_rust::macros::selector!("get_lobbies"),
+            calldata: __calldata,
+        };
+        cainome::cairo_serde::call::FCall::new(__call, self.provider())
+    }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
     pub fn get_next_game_id(

@@ -12,6 +12,7 @@ pub mod orientation;
 pub mod result;
 pub mod ship;
 pub mod ship_kind;
+pub mod lobby;
 
 pub use board::Board;
 pub use cell::Cell;

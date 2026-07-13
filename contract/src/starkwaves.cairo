@@ -1,5 +1,5 @@
 use crate::types::phase::TimeoutConfig;
-use crate::types::{BoardSize, FireStatus, Ship};
+use crate::types::{BoardSize, FireStatus, Lobbies, Lobby, Ship};
 
 #[starknet::interface]
 pub trait IStarkwaves<TContractState> {
@@ -22,6 +22,8 @@ pub trait IStarkwaves<TContractState> {
     fn get_next_game_id(self: @TContractState) -> felt252;
 
     fn get_timeout_config(self: @TContractState) -> TimeoutConfig;
+
+    fn get_lobbies(self: @TContractState) -> Lobbies;
 }
 
 #[starknet::contract]
@@ -40,7 +42,7 @@ pub mod Starkwaves {
     };
     use crate::game::{Game, GameTrait};
     use crate::types::{AllBoardSizesTrait, BoardSizeTrait, Outcome};
-    use super::{*, BoardSize, FireStatus, TimeoutConfig};
+    use super::{*, BoardSize, FireStatus, Lobby, TimeoutConfig};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     #[abi(embed_v0)]
@@ -251,6 +253,23 @@ pub mod Starkwaves {
 
         fn get_timeout_config(self: @ContractState) -> TimeoutConfig {
             Default::default()
+        }
+
+        fn get_lobbies(self: @ContractState) -> Lobbies {
+            let all_board_sizes = AllBoardSizesTrait::all();
+            let mut waitlist: Array<Lobby> = ArrayTrait::new();
+
+            for board_size in all_board_sizes {
+                let size = board_size.size();
+                let player = self.open_lobbies.entry(size).read();
+
+                if player.is_non_zero() {
+                    let lobby = Lobby { player, size: *board_size };
+                    waitlist.append(lobby);
+                }
+            }
+
+            Lobbies { waitlist }
         }
     }
 
