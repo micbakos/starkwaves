@@ -58,6 +58,14 @@ macro_rules! screens {
             }
         )+
 
+        pub fn screens_on_start(state: &ScreenState) -> Option<ScreenIntent> {
+            match state {
+                $(
+                    ScreenState::$screen_name(screen_state) => <$screen_path as crate::types::screen::Screen>::on_start(screen_state).map(Into::into),
+                )+
+            }
+        }
+
         pub fn screens_on_key(state: &ScreenState, key: crossterm::event::KeyEvent) -> Option<ScreenIntent> {
             match state {
                 $(

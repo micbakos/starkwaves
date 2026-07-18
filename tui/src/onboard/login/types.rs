@@ -7,6 +7,7 @@ use crate::app::types::LoggedAccount;
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray)]
 pub enum LoginOption {
+    #[cfg(debug_assertions)]
     Local,
     Cartridge,
 }
@@ -77,5 +78,7 @@ pub enum Intent {
 }
 
 pub enum Effect {
-    RequestLoginWithCartridge(PathBuf)
+    RequestLoginWithCartridge(PathBuf),
+    #[cfg(debug_assertions)]
+    RequestLoginWithPrivateKeyFromEnv
 }

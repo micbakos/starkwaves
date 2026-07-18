@@ -1,10 +1,16 @@
 use crate::app::storage::{StoredAccount, StoredAccountKind, StoredSession};
 use crate::app::types::{AccountKind, LoggedAccount};
+use crate::types::error::TuiError;
 use crate::types::result::Result;
+use starknet_rust::accounts::{ExecutionEncoding, SingleOwnerAccount};
+use starknet_rust::providers::JsonRpcClient;
+use starknet_rust::providers::jsonrpc::HttpTransport;
+use starknet_rust::signers::{LocalWallet, SigningKey};
 use starknet_rust_core::types::Felt;
 use starkwaves_client::game::game::Game;
 use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
 use starkwaves_client::types::account::game_account::GameAccount;
+use starkwaves_client::types::account::local_account::LocalAccount;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -71,18 +77,22 @@ impl Services {
             return Ok(None);
         }
 
-        if storage_data.account.kind == StoredAccountKind::Cartridge {
-            if let Some(cli_path) = Self::cartridge_cli_path() {
-                let account = self.resolve_cartridge_account(cli_path).await?;
+        match storage_data.account.kind {
+            StoredAccountKind::Cartridge => {
+                if let Some(cli_path) = Self::cartridge_cli_path() {
+                    let account = self.resolve_cartridge_account(cli_path).await?;
+
+                    Ok(Some(account))
+                } else {
+                    StoredSession::delete()?;
+                    Ok(None)
+                }
+            },
+            StoredAccountKind::Env => {
+                let account = self.resolve_local_account_from_env().await?;
 
                 Ok(Some(account))
-            } else {
-                StoredSession::delete()?;
-                Ok(None)
-            }
-        } else {
-            // TODO other kinds of accounts?
-            Ok(None)
+            },
         }
     }
 
@@ -95,7 +105,7 @@ impl Services {
         if let Some(player) = player {
             player.disconnect().await?;
         }
-        
+
         StoredSession::delete()?;
 
         Ok(())
@@ -124,12 +134,53 @@ impl Services {
             self.on_chain.contract_address,
             self.on_chain.chain_id,
             StoredAccount {
-                address: account.address.clone(),
+                address: account.address,
                 username: account.username.clone(),
                 kind: StoredAccountKind::Cartridge,
-            }
-        ).store()?;
+            },
+        )
+        .store()?;
 
         Ok(account)
+    }
+
+    pub async fn resolve_local_account_from_env(&self) -> Result<LoggedAccount> {
+        let address = env::var("DEV_PLAYER_ADDR")
+            .map(|a| Felt::from_hex(a.as_str()).expect("Invalid DEV_PLAYER_ADDR"))
+            .or(Err(TuiError::FailedToReadAccountKeysFromEnv))?;
+
+        let private_key = env::var("DEV_PLAYER_PRIVATE_KEY")
+            .map(|pk| Felt::from_hex(pk.as_str()).expect("Invalid DEV_PLAYER_PRIVATE_KEY"))
+            .or(Err(TuiError::FailedToReadAccountKeysFromEnv))?;
+
+        let signer = LocalWallet::from(SigningKey::from_secret_scalar(private_key));
+        let provider = JsonRpcClient::new(HttpTransport::new(self.on_chain.rpc_url.to_owned()));
+        let local_account = SingleOwnerAccount::new(
+            provider,
+            signer,
+            address,
+            self.on_chain.chain_id,
+            ExecutionEncoding::New,
+        );
+
+        let mut player = self.player.write().unwrap();
+        *player = Some(Arc::new(local_account));
+ 
+        StoredSession::new(
+            self.on_chain.contract_address,
+            self.on_chain.chain_id,
+            StoredAccount {
+                address,
+                username: "Local Account".into(),
+                kind: StoredAccountKind::Env,
+            },
+        )
+        .store()?;
+
+        Ok(LoggedAccount {
+            address,
+            username: "Local Account".into(),
+            kind: AccountKind::Local,
+        })
     }
 }

@@ -1,3 +1,4 @@
+use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::types::AppEffect;
 use crate::types::AppIntent;
@@ -6,9 +7,8 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::services::Services;
+use tokio::sync::mpsc::error::SendError;
 
 pub trait Screen {
     type Intent;
@@ -26,5 +26,13 @@ pub trait Screen {
 
     fn on_key(key: KeyEvent, state: &Self::State) -> Option<Self::Intent>;
 
-    async fn run(effect: Self::Effect, services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> Result<(), SendError<AppIntent>>;
+    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
+        None
+    }
+
+    async fn run(
+        effect: Self::Effect,
+        services: Arc<Services>,
+        intents: UnboundedSender<AppIntent>,
+    ) -> Result<(), SendError<AppIntent>>;
 }

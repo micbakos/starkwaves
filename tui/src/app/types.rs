@@ -1,5 +1,5 @@
-use crate::types::ScreenState;
 use crate::types::nav::NavCommand;
+use crate::types::{ScreenIntent, ScreenState};
 use enum_as_inner::EnumAsInner;
 use starknet_rust_core::types::Felt;
 use std::collections::VecDeque;
@@ -24,7 +24,8 @@ pub struct ToastsState {
 pub enum Effect {
     RequestQuit,
     RequestNav(NavCommand),
-    RequestPopToastAfter(Duration)
+    RequestForwardIntent(ScreenIntent),
+    RequestPopToastAfter(Duration),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
@@ -33,7 +34,7 @@ pub enum Intent {
     OnNav(NavCommand),
     OnAccountLoggedIn(LoggedAccount),
     OnShowToast(String),
-    OnHideToast
+    OnHideToast,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
@@ -54,5 +55,3 @@ pub enum AccountKind {
     Local,
     Cartridge,
 }
-
-

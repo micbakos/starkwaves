@@ -3,10 +3,7 @@ use crate::app::types::Intent::OnNav;
 use crate::app::types::{AccountState, CoreState, Effect, Intent};
 use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
-use crate::types::{
-    AppEffect, AppIntent, AppState, screens_reduce, screens_render,
-    screens_run,
-};
+use crate::types::{AppEffect, AppIntent, AppState, screens_reduce, screens_render, screens_run};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
@@ -15,8 +12,8 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::error::SendError;
 use tokio::time::sleep;
 
 pub struct AppScreen;
@@ -41,7 +38,9 @@ impl Screen for AppScreen {
                         state.core.running = false;
                     }
                     Intent::OnNav(command) => {
-                        command.handle(&mut state);
+                        if let Some(screen_intent) = command.handle(&mut state) {
+                            effects.push(Effect::RequestForwardIntent(screen_intent).into());
+                        }
                     }
                     Intent::OnAccountLoggedIn(logged_account) => {
                         state.core.account = AccountState::LoggedIn(logged_account);
@@ -49,17 +48,19 @@ impl Screen for AppScreen {
                     Intent::OnShowToast(message) => {
                         if state.core.toasts.current.is_none() {
                             state.core.toasts.current = Some(message.clone());
-                            effects.push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
+                            effects
+                                .push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
                         } else {
                             state.core.toasts.queue.push_back(message);
                         }
-                    },
+                    }
                     Intent::OnHideToast => {
                         let queued = state.core.toasts.queue.front();
 
                         if let Some(message) = queued {
                             state.core.toasts.current = Some(message.clone());
-                            effects.push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
+                            effects
+                                .push(Effect::RequestPopToastAfter(Duration::from_secs(2)).into())
                         } else {
                             state.core.toasts.current = None;
                         }
@@ -128,6 +129,9 @@ impl Screen for AppScreen {
                     sleep(duration).await;
                     intents.send(Intent::OnHideToast.into())?;
                 }
+                Effect::RequestForwardIntent(screen_intent) => {
+                    intents.send(screen_intent.into())?
+                }
             },
             AppEffect::Screen(screen_effect) => {
                 screens_run(screen_effect, services, intents).await?
@@ -142,12 +146,10 @@ fn render_core_details(frame: &mut Frame, area: Rect, core: &CoreState) {
     let [details_area, version_area] =
         Layout::horizontal([Constraint::Fill(1), Constraint::Min(1)]).areas(area);
 
-    let address_text = Paragraph::new(
-        Line::from(vec![
-            Span::from("Game: "),
-            Span::styled(core.contract_address.as_str(), Style::default().bold()),
-        ])
-    );
+    let address_text = Paragraph::new(Line::from(vec![
+        Span::from("Game: "),
+        Span::styled(core.contract_address.as_str(), Style::default().bold()),
+    ]));
     let [address_area, _, chain_id_area] = Layout::horizontal([
         Constraint::Length(address_text.line_width() as u16),
         Constraint::Length(2),
@@ -175,10 +177,8 @@ fn toast_render(frame: &mut Frame, area: Rect, toast: String) {
     let popup_width = message_area + 4;
     let popup_height = inner_height + 2;
 
-    let [_, bottom] = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(popup_height)
-    ]).areas(area);
+    let [_, bottom] =
+        Layout::vertical([Constraint::Fill(1), Constraint::Length(popup_height)]).areas(area);
 
     let [popup_area] = Layout::horizontal([Constraint::Length(popup_width)])
         .flex(Flex::Center)

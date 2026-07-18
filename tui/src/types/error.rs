@@ -17,7 +17,11 @@ pub enum TuiError {
 
     #[error("Unable to write to storage. {0}")]
     #[from(skip)]
-    FailedToWriteToStorage(String)
+    FailedToWriteToStorage(String),
+
+    #[cfg(debug_assertions)]
+    #[error("Failed to read env")]
+    FailedToReadAccountKeysFromEnv
 }
 
 impl <T> From<SendError<T>> for TuiError {

@@ -5963,6 +5963,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "starknet-rust",
  "starknet-rust-core",
  "starkwaves-client",
  "strum",

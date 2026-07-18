@@ -1,6 +1,6 @@
 mod app;
-mod onboard;
 mod lobby;
+mod onboard;
 mod types;
 mod utils;
 
@@ -9,7 +9,8 @@ use crate::app::services::{OnChainData, Services};
 use crate::onboard::splash;
 use crate::types::result::Result;
 use crate::types::screen::Screen;
-use crate::types::{AppState, screens_on_key};
+use crate::types::{AppState, screens_on_key, screens_on_start};
+use color_eyre::eyre::eyre;
 use crossterm::event::Event;
 use dotenv::dotenv;
 use onboard::login;
@@ -20,7 +21,6 @@ use starknet_rust_core::utils::cairo_short_string_to_felt;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
-use color_eyre::eyre::eyre;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, watch};
 use types::AppEffect;
@@ -51,9 +51,7 @@ async fn main() -> color_eyre::Result<()> {
 
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let result = run(terminal, on_chain_data)
-        .await
-        .map_err(|e| eyre!(e));
+    let result = run(terminal, on_chain_data).await.map_err(|e| eyre!(e));
     ratatui::restore();
     result
 }
@@ -88,13 +86,25 @@ async fn run(mut terminal: DefaultTerminal, on_chain_data: OnChainData) -> Resul
     tokio::spawn(async move {
         while let Some(effects) = effects_receiver.recv().await {
             for effect in effects {
-                tokio::spawn(AppScreen::run(effect, services.clone(), effects_intent_sender.clone()));
+                tokio::spawn(AppScreen::run(
+                    effect,
+                    services.clone(),
+                    effects_intent_sender.clone(),
+                ));
             }
         }
     });
 
-    // First intent to start splash screen's reducer
-    intent_sender.send(splash::types::Intent::OnStart.into())?;
+    // First intent to start the top screen's reducer. The top screen
+    // is expected to return a start intent signal.
+    let initial_state: AppState = state_receiver.borrow().clone();
+    let initial_screen = initial_state
+        .screens
+        .front()
+        .expect("Expected first screen to exist in stack");
+    if let Some(on_start_intent) = screens_on_start(initial_screen) {
+        intent_sender.send(on_start_intent.into())?;
+    }
 
     // Observe intents and reduce them to new state or effects
     while let Some(intent) = intent_receiver.recv().await {

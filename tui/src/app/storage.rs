@@ -100,12 +100,16 @@ impl Into<LoggedAccount> for StoredAccount {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum StoredAccountKind {
     Cartridge,
+    #[cfg(debug_assertions)]
+    Env
 }
 
 impl Into<AccountKind> for StoredAccountKind {
     fn into(self) -> AccountKind {
         match self {
-            Self::Cartridge => AccountKind::Cartridge
+            Self::Cartridge => AccountKind::Cartridge,
+            #[cfg(debug_assertions)]
+            StoredAccountKind::Env => AccountKind::Local,
         }
     }
 }

@@ -1,6 +1,6 @@
-use std::fmt::format;
 use crate::app::services::Services;
 use crate::app::types::CoreState;
+use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
 use crate::onboard::login::types::{CliPopupAction, Effect, Intent, LoginOption, State};
 use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
@@ -13,11 +13,8 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 use std::sync::Arc;
 use strum::VariantArray;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
-use crate::lobby::types::Intent::OnStart;
-use crate::types::result::Result;
+use tokio::sync::mpsc::error::SendError;
 
 pub struct LoginScreen {}
 
@@ -43,12 +40,20 @@ impl Screen for LoginScreen {
                     }
 
                     new_state.cli_popup = None;
-                } else if state.login_option == LoginOption::Cartridge {
-                    if let Some(path) = Services::cartridge_cli_path() {
-                        effects.push(Effect::RequestLoginWithCartridge(path).into());
-                        new_state.dismiss_popup();
-                    } else {
-                        new_state.reveal_popup();
+                } else {
+                    match state.login_option {
+                        #[cfg(debug_assertions)]
+                        LoginOption::Local => {
+                            effects.push(Effect::RequestLoginWithPrivateKeyFromEnv.into())
+                        }
+                        LoginOption::Cartridge => {
+                            if let Some(path) = Services::cartridge_cli_path() {
+                                effects.push(Effect::RequestLoginWithCartridge(path).into());
+                                new_state.dismiss_popup();
+                            } else {
+                                new_state.reveal_popup();
+                            }
+                        }
                     }
                 }
             }
@@ -69,10 +74,11 @@ impl Screen for LoginScreen {
         frame.render_widget(block, area);
 
         let lines = LoginOption::VARIANTS
-            .into_iter()
+            .iter()
             .map(|option| {
                 let label = match option {
-                    LoginOption::Local => "Local Account",
+                    #[cfg(debug_assertions)]
+                    LoginOption::Local => "Local Account (Dev)",
                     LoginOption::Cartridge => "Cartridge",
                 };
 
@@ -175,8 +181,7 @@ impl Screen for LoginScreen {
     ) -> std::result::Result<(), SendError<AppIntent>> {
         match effect {
             Effect::RequestLoginWithCartridge(cli_path) => {
-                let logged_account_result = services.resolve_cartridge_account(cli_path)
-                    .await;
+                let logged_account_result = services.resolve_cartridge_account(cli_path).await;
 
                 match logged_account_result {
                     Ok(logged_account) => {
@@ -185,7 +190,22 @@ impl Screen for LoginScreen {
 
                         let lobby_state = crate::lobby::types::State::new(logged_account);
                         intents.send(OnNav(NavCommand::ResetTo(lobby_state.into())).into())?;
-                        intents.send(OnStart.into())?;
+                    }
+                    Err(error) => {
+                        intents.send(OnShowToast(format!("{}", error)).into())?;
+                    }
+                }
+            }
+            #[cfg(debug_assertions)]
+            Effect::RequestLoginWithPrivateKeyFromEnv => {
+                let env_account_result = services.resolve_local_account_from_env().await;
+
+                match env_account_result {
+                    Ok(logged_account) => {
+                        intents.send(OnAccountLoggedIn(logged_account.clone()).into())?;
+
+                        let lobby_state = crate::lobby::types::State::new(logged_account);
+                        intents.send(OnNav(NavCommand::ResetTo(lobby_state.into())).into())?;
                     }
                     Err(error) => {
                         intents.send(OnShowToast(format!("{}", error)).into())?;

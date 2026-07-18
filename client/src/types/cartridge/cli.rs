@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use starknet_rust_core::types::{BlockId, BlockTag, Call, Felt, FunctionCall};
 use starknet_rust_core::utils::parse_cairo_short_string;
+use url::Url;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -325,7 +326,7 @@ impl CartridgeCLI {
         F: FnMut(CliEvent),
     {
         let mut args: Vec<&str> = args.to_vec();
-        if !args.iter().any(|a| *a == "--json") {
+        if !args.contains(&"--json") {
             args.push("--json");
         }
 

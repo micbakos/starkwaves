@@ -28,6 +28,10 @@ impl Screen for LobbyScreen {
     type Effect = Effect;
     type State = State;
 
+    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
+        Some(Intent::OnStart)
+    }
+
     fn reduce(
         state: &Self::State,
         intent: Self::Intent,
@@ -185,8 +189,9 @@ impl Screen for LobbyScreen {
                     intents.send(OnShowToast(e.to_string()).into())?
                 } else {
                     let splash = crate::splash::types::State::new();
-                    intents.send(OnNav(crate::types::nav::NavCommand::ResetTo(splash.into())).into())?;
-                    intents.send(crate::splash::types::Intent::OnStart.into())?;
+                    intents.send(
+                        OnNav(crate::types::nav::NavCommand::ResetTo(splash.into())).into(),
+                    )?;
                 }
             }
         }

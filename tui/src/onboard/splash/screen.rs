@@ -1,5 +1,7 @@
 use crate::app::services::Services;
-use crate::app::types::{CoreState, LoggedAccount};
+use crate::app::types::CoreState;
+use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
+use crate::lobby::types::Intent::OnStart;
 use crate::onboard::splash::types::{Effect, Intent, State};
 use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
@@ -10,11 +12,8 @@ use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::Paragraph;
 use std::sync::Arc;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
-use crate::lobby::screen::LobbyScreen;
-use crate::lobby::types::Intent::OnStart;
+use tokio::sync::mpsc::error::SendError;
 
 pub struct SplashScreen {}
 
@@ -22,6 +21,10 @@ impl Screen for SplashScreen {
     type Intent = Intent;
     type Effect = Effect;
     type State = State;
+
+    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
+        Some(Intent::OnStart)
+    }
 
     fn reduce(
         state: &Self::State,
@@ -67,7 +70,6 @@ impl Screen for SplashScreen {
 
                     let lobby_state = crate::lobby::types::State::new(account);
                     intents.send(OnNav(NavCommand::Replace(lobby_state.into())).into())?;
-                    intents.send(OnStart.into())?;
                 } else if let Err(err) = result {
                     intents.send(OnShowToast(err.to_string()).into())?;
                 } else {
