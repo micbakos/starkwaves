@@ -4,13 +4,13 @@ use cainome::cairo_serde::ContractAddress;
 use enum_as_inner::EnumAsInner;
 use starknet_rust::core::types::Felt;
 
-#[derive(Debug, EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum GameState {
     InLobby(BoardSize),
     InGame(GameData),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameData {
     pub game_id: Felt,
     pub opponent: ContractAddress,
@@ -41,7 +41,7 @@ impl GameData {
     }
 }
 
-#[derive(Debug, EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum InGameState {
     PlacingShips,
     Playing(PlayTurn),

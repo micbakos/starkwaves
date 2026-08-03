@@ -10,11 +10,12 @@ use starknet_rust_core::types::Felt;
 use starkwaves_client::game::game::Game;
 use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
 use starkwaves_client::types::account::game_account::GameAccount;
-use starkwaves_client::types::account::local_account::LocalAccount;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, RwLock};
+use std::thread::JoinHandle;
+use tokio::sync::Mutex;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,12 +23,14 @@ pub struct OnChainData {
     pub contract_address: Felt,
     pub chain_id: Felt,
     pub rpc_url: Url,
+    pub ws_url: Url,
 }
 
 pub struct Services {
     pub on_chain: OnChainData,
     pub player: RwLock<Option<Arc<dyn GameAccount>>>,
-    pub in_game: RwLock<Option<Game>>,
+    pub in_game: RwLock<Option<Arc<Mutex<Game>>>>,
+    pub lobby_polling: Option<JoinHandle<()>>,
 }
 
 impl Services {
@@ -62,6 +65,7 @@ impl Services {
             on_chain: on_chain_data,
             player: RwLock::new(None),
             in_game: RwLock::new(None),
+            lobby_polling: None,
         }
     }
 
@@ -87,12 +91,12 @@ impl Services {
                     StoredSession::delete()?;
                     Ok(None)
                 }
-            },
+            }
             StoredAccountKind::Env => {
                 let account = self.resolve_local_account_from_env().await?;
 
                 Ok(Some(account))
-            },
+            }
         }
     }
 
@@ -165,7 +169,7 @@ impl Services {
 
         let mut player = self.player.write().unwrap();
         *player = Some(Arc::new(local_account));
- 
+
         StoredSession::new(
             self.on_chain.contract_address,
             self.on_chain.chain_id,

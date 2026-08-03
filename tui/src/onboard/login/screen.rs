@@ -2,6 +2,7 @@ use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
 use crate::onboard::login::types::{CliPopupAction, Effect, Intent, LoginOption, State};
+use crate::popup::render_popup;
 use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
@@ -99,48 +100,14 @@ impl Screen for LoginScreen {
         frame.render_widget(Paragraph::new(lines), buttons_area);
 
         if let Some(popup) = state.cli_popup {
-            let popup_block = Block::bordered().title("Login with Cartridge");
-            let popup_area = area.centered(Constraint::Percentage(60), Constraint::Percentage(20));
-            frame.render_widget(Clear, popup_area);
-            let inner_area = popup_block.inner(popup_area);
-            frame.render_widget(popup_block, popup_area);
-
-            let popup_layout = Layout::default()
-                .constraints([Constraint::Fill(1), Constraint::Length(1)])
-                .split(inner_area);
-
-            let message = Paragraph::new("Login with Cartridge requires controller cli. Do you want to install controller cli?").centered();
-            let [_, message_area, _] = Layout::default()
-                .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Fill(1)])
-                .areas(popup_layout[0]);
-
-            frame.render_widget(message, message_area);
-
-            let buttons_layout =
-                Layout::horizontal(CliPopupAction::VARIANTS.iter().map(|_| Constraint::Fill(1)))
-                    .split(popup_layout[1]);
-
-            let selected_style = Style::default().reversed();
-            let normal_style = Style::default();
-
-            CliPopupAction::VARIANTS
-                .iter()
-                .enumerate()
-                .for_each(|(index, variant)| {
-                    let label = match variant {
-                        CliPopupAction::Download => "Download",
-                        CliPopupAction::Cancel => "Cancel",
-                    };
-
-                    let style = if popup.action == *variant {
-                        selected_style
-                    } else {
-                        normal_style
-                    };
-
-                    let line = Line::raw(label).centered().style(style);
-                    frame.render_widget(line, buttons_layout[index]);
-                })
+            render_popup(
+                frame,
+                area,
+                Some("Login with Cartridge"),
+                "Login with Cartridge requires controller cli. Do you want to install controller cli?",
+                &popup.action,
+                CliPopupAction::VARIANTS,
+            );
         }
     }
 

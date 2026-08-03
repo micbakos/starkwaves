@@ -1,5 +1,6 @@
 // @generated - do not edit
 pub const STARKWAVES_METHOD_SELECTORS: &[&str] = &[
+    "exit_lobby",
     "request_start_game",
     "commit_board",
     "attack",

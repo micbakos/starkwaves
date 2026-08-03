@@ -10,6 +10,7 @@ use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use starkwaves_client::game::game::GameUpdate;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -38,13 +39,17 @@ impl Screen for AppScreen {
                         state.core.running = false;
                     }
                     Intent::OnNav(command) => {
-                        if let Some(screen_intent) = command.handle(&mut state) {
-                            effects.push(Effect::RequestForwardIntent(screen_intent).into());
-                        }
+                        let nav_effects = command.prepare_effects(&state);
+                        effects.extend(nav_effects);
+                    }
+                    Intent::OnSettleNav(command) => {
+                        let nav_effects = command.settle(&mut state);
+                        effects.extend(nav_effects);
                     }
                     Intent::OnAccountLoggedIn(logged_account) => {
                         state.core.account = AccountState::LoggedIn(logged_account);
                     }
+                    Intent::OnAccountLoggedOut => state.core.account = AccountState::None,
                     Intent::OnShowToast(message) => {
                         if state.core.toasts.current.is_none() {
                             state.core.toasts.current = Some(message.clone());
@@ -65,6 +70,29 @@ impl Screen for AppScreen {
                             state.core.toasts.current = None;
                         }
                     }
+                    Intent::OnGameUpdate(game_update) => match game_update {
+                        GameUpdate::OpponentJoined { opponent } => {
+                            todo!()
+                        }
+                        GameUpdate::ShipsPlaced => todo!(),
+                        GameUpdate::BoardCommitted => todo!(),
+                        GameUpdate::GameStarted { your_turn } => {
+                            todo!()
+                        }
+                        GameUpdate::IncomingAttack { x, y } => {
+                            todo!()
+                        }
+                        GameUpdate::AttackResult {
+                            x,
+                            y,
+                            hit,
+                            destroyed_ship,
+                        } => todo!(),
+                        GameUpdate::YouWereHit { x, y } => todo!(),
+                        GameUpdate::RevealRequested => todo!(),
+                        GameUpdate::GameOver { outcome } => todo!(),
+                        GameUpdate::Reset => todo!(),
+                    },
                 }
 
                 (state, effects)
@@ -129,8 +157,8 @@ impl Screen for AppScreen {
                     sleep(duration).await;
                     intents.send(Intent::OnHideToast.into())?;
                 }
-                Effect::RequestForwardIntent(screen_intent) => {
-                    intents.send(screen_intent.into())?
+                Effect::RequestSettleNav(nav_command) => {
+                    intents.send(Intent::OnSettleNav(nav_command).into())?;
                 }
             },
             AppEffect::Screen(screen_effect) => {

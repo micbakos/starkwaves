@@ -21,10 +21,10 @@ pub enum TuiError {
 
     #[cfg(debug_assertions)]
     #[error("Failed to read env")]
-    FailedToReadAccountKeysFromEnv
+    FailedToReadAccountKeysFromEnv,
 }
 
-impl <T> From<SendError<T>> for TuiError {
+impl<T> From<SendError<T>> for TuiError {
     fn from(_value: SendError<T>) -> Self {
         Self::SendIntentError
     }

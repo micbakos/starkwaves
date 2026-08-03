@@ -1,6 +1,7 @@
 mod app;
 mod lobby;
 mod onboard;
+mod popup;
 mod types;
 mod utils;
 
@@ -9,7 +10,7 @@ use crate::app::services::{OnChainData, Services};
 use crate::onboard::splash;
 use crate::types::result::Result;
 use crate::types::screen::Screen;
-use crate::types::{AppState, screens_on_key, screens_on_start};
+use crate::types::{AppState, screens_on_key, screens_on_push_effect};
 use color_eyre::eyre::eyre;
 use crossterm::event::Event;
 use dotenv::dotenv;
@@ -29,6 +30,7 @@ use url::Url;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    starkwaves_client::install_crypto_provider();
     dotenv().ok();
     let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
     dotenv::from_filename(format!(".env.{}", preset)).ok();
@@ -42,11 +44,15 @@ async fn main() -> color_eyre::Result<()> {
     let rpc_url = env::var("RPC_URL")
         .map(|a| Url::from_str(a.as_str()).expect("Invalid RPC_URL"))
         .expect("RPC_URL is not set");
+    let ws_url = env::var("WS_URL")
+        .map(|a| Url::from_str(a.as_str()).expect("Invalid WS_URL"))
+        .expect("WS_URL is not set");
 
     let on_chain_data = OnChainData {
         contract_address,
         chain_id,
         rpc_url,
+        ws_url,
     };
 
     color_eyre::install()?;
@@ -95,16 +101,16 @@ async fn run(mut terminal: DefaultTerminal, on_chain_data: OnChainData) -> Resul
         }
     });
 
-    // First intent to start the top screen's reducer. The top screen
-    // is expected to return a start intent signal.
+    // First effect to start the top screen's reducer. The top screen
+    // is expected to return a start effect signal.
     let initial_state: AppState = state_receiver.borrow().clone();
-    let initial_screen = initial_state
+    let top_screen = initial_state
         .screens
         .front()
-        .expect("Expected first screen to exist in stack");
-    if let Some(on_start_intent) = screens_on_start(initial_screen) {
-        intent_sender.send(on_start_intent.into())?;
-    }
+        .expect("Expected first screen to exist in stack.");
+    let push_effect = screens_on_push_effect(&top_screen)
+        .expect("Expected first screen to listen for push effect.");
+    effects_sender.send(vec![push_effect])?;
 
     // Observe intents and reduce them to new state or effects
     while let Some(intent) = intent_receiver.recv().await {
@@ -145,10 +151,9 @@ fn observe_keys(
                 let top_screen = current_state
                     .screens
                     .front()
-                    .expect("Received key but screen should exist")
-                    .clone();
+                    .expect("Received key but screen should exist");
 
-                let intent = screens_on_key(&top_screen, event)
+                let intent = screens_on_key(top_screen, event)
                     .map(|i| i.into())
                     .or_else(|| AppScreen::on_key(event, &current_state));
 

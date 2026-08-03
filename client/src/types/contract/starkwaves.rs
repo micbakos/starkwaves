@@ -32,6 +32,15 @@ impl Starkwaves {
         }
     }
 
+    pub fn exit_lobby(&self, board_size: &BoardSize) -> Call {
+        let board_size: generated::BoardSize = (*board_size).into();
+        Call {
+            to: self.address,
+            selector: selector!("exit_lobby"),
+            calldata: generated::BoardSize::cairo_serialize(&board_size),
+        }
+    }
+
     pub fn attack(&self, game_id: &Felt, x: &u8, y: &u8) -> Call {
         let mut calldata = vec![];
         calldata.extend(Felt::cairo_serialize(game_id));

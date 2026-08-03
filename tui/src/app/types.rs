@@ -1,7 +1,9 @@
-use crate::types::nav::NavCommand;
+use crate::lobby::types::LobbyVariant;
+use crate::types::nav::{NavCommand, SettleNavCommand};
 use crate::types::{ScreenIntent, ScreenState};
 use enum_as_inner::EnumAsInner;
 use starknet_rust_core::types::Felt;
+use starkwaves_client::game::game::GameUpdate;
 use std::collections::VecDeque;
 use std::time::Duration;
 
@@ -24,15 +26,18 @@ pub struct ToastsState {
 pub enum Effect {
     RequestQuit,
     RequestNav(NavCommand),
-    RequestForwardIntent(ScreenIntent),
+    RequestSettleNav(SettleNavCommand),
     RequestPopToastAfter(Duration),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, EnumAsInner, derive_more::From)]
 pub enum Intent {
     OnQuit,
     OnNav(NavCommand),
+    OnSettleNav(SettleNavCommand),
     OnAccountLoggedIn(LoggedAccount),
+    OnAccountLoggedOut,
+    OnGameUpdate(GameUpdate),
     OnShowToast(String),
     OnHideToast,
 }

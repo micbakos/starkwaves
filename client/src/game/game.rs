@@ -29,7 +29,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use url::Url;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameUpdate {
     OpponentJoined {
         opponent: ContractAddress,
@@ -75,11 +75,11 @@ pub trait GameCallback: Send + Sync {
 
 pub struct Game {
     contract_address: Felt,
-    player: Box<dyn GameAccount>,
+    player: Arc<dyn GameAccount>,
     ws_url: Url,
     salt: u64,
     state: GameState,
-    callback: Arc<dyn GameCallback>,
+    updates: mpsc::UnboundedSender<GameUpdate>,
     in_game_events_task: Option<JoinHandle<()>>,
     event_processor_task: Option<JoinHandle<()>>,
 }
@@ -87,7 +87,7 @@ pub struct Game {
 impl Game {
     pub async fn get_lobbies(
         contract_address: Felt,
-        player: &dyn GameAccount,
+        player: &Arc<dyn GameAccount>,
     ) -> Result<Lobbies> {
         let contract = Starkwaves::new(contract_address);
         let result = player
@@ -109,18 +109,74 @@ impl Game {
         self.player.address().into()
     }
 
+    pub async fn await_opponent(
+        contract_address: Felt,
+        ws_url: Url,
+        player: Arc<dyn GameAccount>,
+        board_size: BoardSize,
+        updates: mpsc::UnboundedSender<GameUpdate>,
+        block_number: Option<u64>,
+    ) -> Arc<Mutex<Game>> {
+        let game = Arc::new(Mutex::new(Self {
+            contract_address,
+            player,
+            ws_url: ws_url.clone(),
+            salt: rand::random(),
+            state: GameState::InLobby(board_size),
+            updates,
+            in_game_events_task: None,
+            event_processor_task: None,
+        }));
+
+        let (sender, receiver) = mpsc::channel(100);
+
+        let event_task = tokio::spawn(async move {
+            if let Err(e) = Self::subscribe_for_lobby(
+                ws_url,
+                contract_address,
+                board_size,
+                sender,
+                block_number.map(|n| n.saturating_sub(1)),
+            )
+            .await
+            {
+                log::error!("Event subscription error: {}", e);
+            }
+        });
+
+        let game_clone = Arc::clone(&game);
+        let processor_task = tokio::spawn(Self::process_events(game_clone, receiver));
+
+        {
+            let mut g = game.lock().await;
+            g.in_game_events_task = Some(event_task);
+            g.event_processor_task = Some(processor_task);
+        }
+
+        game
+    }
+
+    pub async fn exit_lobby(&self, board_size: &BoardSize) -> Result<()> {
+        let contract = Starkwaves::new(self.contract_address);
+
+        let call = contract.exit_lobby(board_size);
+        self.player.send_and_wait(vec![call]).await?;
+
+        Ok(())
+    }
+
     pub async fn join(
         contract_address: Felt,
         ws_url: Url,
-        player: Box<dyn GameAccount>,
+        player: Arc<dyn GameAccount>,
         board_size: BoardSize,
-        callback: Arc<dyn GameCallback>,
+        updates: mpsc::UnboundedSender<GameUpdate>,
     ) -> Result<Arc<Mutex<Self>>> {
         info!("Joining lobby {}", board_size);
         info!("Your Address {:#x}", player.address());
         let contract = Starkwaves::new(contract_address);
 
-        let call = contract.request_start_game(&board_size.into());
+        let call = contract.request_start_game(&board_size);
         let (events, block_number) = player.send_and_wait(vec![call]).await.and_then(|info| {
             info.receipt
                 .into_events()
@@ -133,46 +189,19 @@ impl Game {
 
         match event {
             Event::PlayerEntererLobby(_) => {
-                let game = Arc::new(Mutex::new(Self {
+                let game = Self::await_opponent(
                     contract_address,
+                    ws_url,
                     player,
-                    ws_url: ws_url.clone(),
-                    salt: rand::random(),
-                    state: GameState::InLobby(board_size),
-                    callback,
-                    in_game_events_task: None,
-                    event_processor_task: None,
-                }));
-
-                let (sender, receiver) = mpsc::channel(100);
-
-                let event_task = tokio::spawn(async move {
-                    if let Err(e) = Self::subscribe_for_lobby(
-                        ws_url,
-                        contract_address,
-                        board_size,
-                        sender,
-                        block_number.saturating_sub(1),
-                    )
-                    .await
-                    {
-                        log::error!("Event subscription error: {}", e);
-                    }
-                });
-
-                let game_clone = Arc::clone(&game);
-                let processor_task = tokio::spawn(Self::process_events(game_clone, receiver));
-
-                {
-                    let mut g = game.lock().await;
-                    g.in_game_events_task = Some(event_task);
-                    g.event_processor_task = Some(processor_task);
-                }
+                    board_size,
+                    updates,
+                    Some(block_number),
+                )
+                .await;
 
                 Ok(game)
             }
             Event::PlayersAssembled(event) => {
-                let board_size: BoardSize = board_size.into();
                 let opponent = if event.player_a.0 == player.address() {
                     event.player_b.0
                 } else {
@@ -190,7 +219,7 @@ impl Game {
                         opponent.into(),
                         board_size,
                     )),
-                    callback,
+                    updates,
                     in_game_events_task: None,
                     event_processor_task: None,
                 }));
@@ -231,17 +260,21 @@ impl Game {
     }
 
     pub async fn place_ship(&mut self, ship: Ship) -> Result<()> {
-        let callback = self.callback.clone();
+        let updates = self.updates.clone();
         let commit_info = {
             let salt = self.salt;
             let game_data = self.in_game_data()?;
             game_data.board.place_ship(ship)?;
 
             if game_data.board.is_board_ready() {
-                callback.on_update(GameUpdate::ShipsPlaced).await;
+                updates
+                    .send(GameUpdate::ShipsPlaced)
+                    .map_err(|_| GameError::SendUpdateError)?;
                 let root = game_data.board.commit(salt)?;
                 info!("Committing root {}", root);
-                callback.on_update(GameUpdate::BoardCommitted).await;
+                updates
+                    .send(GameUpdate::BoardCommitted)
+                    .map_err(|_| GameError::SendUpdateError)?;
                 let game_id = game_data.game_id;
                 Some((root, game_id))
             } else {
@@ -372,6 +405,10 @@ impl Game {
         Ok(turn.clone())
     }
 
+    pub fn state(&self) -> GameState {
+        self.state.clone()
+    }
+
     fn in_game_data(&mut self) -> Result<&mut GameData> {
         self.state.as_in_game_mut().ok_or(GameError::GameNotStarted)
     }
@@ -385,16 +422,18 @@ impl Game {
         contract_address: Felt,
         board_size: BoardSize,
         sender: mpsc::Sender<(Event, u64)>,
-        block_number: u64,
+        block_number: Option<u64>,
     ) -> Result<()> {
         let stream = TungsteniteStream::connect(ws_url, Duration::from_secs(5))
             .await
             .expect("WebSocket connection failed");
 
+        let block_id =
+            block_number.map_or(ConfirmedBlockId::Latest, |n| ConfirmedBlockId::Number(n));
         let events = EventSubscriptionOptions {
             from_address: Some(AddressFilter::Single(contract_address)),
             keys: Some(in_lobby_event_keys()),
-            block_id: ConfirmedBlockId::Number(block_number),
+            block_id,
             finality_status: L2TransactionFinalityStatus::AcceptedOnL2,
         };
 
@@ -519,9 +558,7 @@ impl Game {
                         let mut g = game.lock().await;
                         g.state =
                             GameState::InGame(GameData::new(game_id, opponent, board_size.into()));
-                        g.callback
-                            .on_update(GameUpdate::OpponentJoined { opponent })
-                            .await;
+                        g.updates.send(GameUpdate::OpponentJoined { opponent });
                     }
 
                     let (sender, receiver) = mpsc::channel(100);
@@ -566,22 +603,22 @@ impl Game {
     async fn handle_event(&mut self, event: Event) -> Result<()> {
         match event {
             Event::GameStarted(event) => {
-                let callback = self.callback.clone();
+                let updates = self.updates.clone();
                 let in_game = self.in_game_data()?;
                 in_game.state = InGameState::Playing(PlayTurn {
                     attacking_player: event.attacker,
                     current_attack: None,
                 });
 
-                callback
-                    .on_update(GameUpdate::GameStarted {
+                updates
+                    .send(GameUpdate::GameStarted {
                         your_turn: event.attacker == self.player_address(),
                     })
-                    .await;
+                    .map_err(|_| GameError::SendUpdateError)?;
             }
             Event::Attack(event) => {
                 if event.player != self.player_address() {
-                    let callback = self.callback.clone();
+                    let updates = self.updates.clone();
                     {
                         let in_game = self.in_game_data()?;
                         let turn = in_game
@@ -596,19 +633,20 @@ impl Game {
                         }
                         turn.current_attack = Some((event.x, event.y));
                     }
-                    callback
-                        .on_update(GameUpdate::IncomingAttack {
+                    updates
+                        .send(GameUpdate::IncomingAttack {
                             x: event.x,
                             y: event.y,
                         })
-                        .await;
+                        .map_err(|_| GameError::SendUpdateError)?;
+
                     if let Err(e) = self.defend(event.x, event.y).await {
                         log::error!("Auto-defend failed: {e}");
                     }
                 }
             }
             Event::AttackResult(event) => {
-                let callback = self.callback.clone();
+                let updates = self.updates.clone();
                 let destroyed_ship = event.destroyed_ship_kind.is_some();
                 let player_address = self.player_address();
 
@@ -617,14 +655,14 @@ impl Game {
                     in_game
                         .board
                         .track_launched_fire(event.x, event.y, destroyed_ship);
-                    callback
-                        .on_update(GameUpdate::AttackResult {
+                    updates
+                        .send(GameUpdate::AttackResult {
                             x: event.x,
                             y: event.y,
                             hit: event.hit,
                             destroyed_ship: event.destroyed_ship_kind.map(|k| k.into()),
                         })
-                        .await;
+                        .map_err(|_| GameError::SendUpdateError)?;
 
                     in_game.state = InGameState::Playing(PlayTurn {
                         attacking_player: in_game.opponent,
@@ -632,12 +670,12 @@ impl Game {
                     });
                 } else {
                     if destroyed_ship {
-                        callback
-                            .on_update(GameUpdate::YouWereHit {
+                        updates
+                            .send(GameUpdate::YouWereHit {
                                 x: event.x,
                                 y: event.y,
                             })
-                            .await;
+                            .map_err(|_| GameError::SendUpdateError)?;
                     }
 
                     in_game.state = InGameState::Playing(PlayTurn {
@@ -647,8 +685,10 @@ impl Game {
                 }
             }
             Event::GameRevealRequest(_) => {
-                let callback = self.callback.clone();
-                callback.on_update(GameUpdate::RevealRequested).await;
+                let updates = self.updates.clone();
+                updates
+                    .send(GameUpdate::RevealRequested)
+                    .map_err(|_| GameError::SendUpdateError)?;
 
                 let outcome = self.reveal().await.unwrap_or_else(|e| {
                     log::error!("Reveal failed: {e}");
@@ -659,7 +699,9 @@ impl Game {
                     let in_game = self.in_game_data()?;
                     if !matches!(in_game.state, InGameState::Ended) {
                         in_game.state = InGameState::Ended;
-                        callback.on_update(GameUpdate::GameOver { outcome }).await;
+                        updates
+                            .send(GameUpdate::GameOver { outcome })
+                            .map_err(|_| GameError::SendUpdateError)?;
                     }
                 }
             }
@@ -670,12 +712,12 @@ impl Game {
                 }
                 in_game.state = InGameState::Ended;
 
-                let callback = self.callback.clone();
-                callback
-                    .on_update(GameUpdate::GameOver {
+                let updates = self.updates.clone();
+                updates
+                    .send(GameUpdate::GameOver {
                         outcome: GameOverOutcome::from(event.outcome, self.player_address()),
                     })
-                    .await;
+                    .map_err(|_| GameError::SendUpdateError)?;
             }
             Event::Reset(_) => {
                 if let GameState::InGame(ref mut in_game) = self.state {
@@ -685,8 +727,10 @@ impl Game {
                     in_game.state = InGameState::Ended;
                 }
 
-                let callback = self.callback.clone();
-                callback.on_update(GameUpdate::Reset).await;
+                let updates = self.updates.clone();
+                updates
+                    .send(GameUpdate::Reset)
+                    .map_err(|_| GameError::SendUpdateError)?;
             }
             _ => {}
         }

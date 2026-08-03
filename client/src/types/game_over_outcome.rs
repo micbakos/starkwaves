@@ -1,7 +1,7 @@
 use crate::types::contract::generated::Outcome;
 use cainome::cairo_serde::ContractAddress;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameOverOutcome {
     Won(Reason),
     Lost(Reason),

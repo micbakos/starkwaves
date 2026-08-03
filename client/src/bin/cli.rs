@@ -19,6 +19,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio, exit};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use url::Url;
 
 #[derive(Parser, Debug)]
@@ -142,13 +143,13 @@ impl Environment {
         JsonRpcClient::new(HttpTransport::new(self.rpc_url.to_owned()))
     }
 
-    pub async fn player(&self, rpc: &JsonRpcClient<HttpTransport>) -> Result<Box<dyn GameAccount>> {
+    pub async fn player(&self, rpc: &JsonRpcClient<HttpTransport>) -> Result<Arc<dyn GameAccount>> {
         match &self.preset {
             PlayerPreset::Local(local_key) => {
                 let signer =
                     LocalWallet::from(SigningKey::from_secret_scalar(local_key.private_key));
 
-                Ok(Box::new(SingleOwnerAccount::new(
+                Ok(Arc::new(SingleOwnerAccount::new(
                     rpc.clone(),
                     signer,
                     local_key.address,
@@ -161,7 +162,7 @@ impl Environment {
                     CartridgeAccount::resolve(cli_path, self.contract_address, self.chain_id)
                         .await?;
 
-                Ok(Box::new(cartridge_account))
+                Ok(Arc::new(cartridge_account))
             }
         }
     }
@@ -169,9 +170,7 @@ impl Environment {
 
 #[tokio::main]
 async fn main() {
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Failed to install rustls crypto provider");
+    starkwaves_client::install_crypto_provider();
     logger_init();
 
     let args = Args::parse();
@@ -185,14 +184,20 @@ async fn main() {
         exit(-1);
     });
 
-    let print_callback = PrintCallback;
+    let (updates_sender, mut updates_receiver) = mpsc::unbounded_channel::<GameUpdate>();
+
+    tokio::spawn(async move {
+        while let Some(update) = updates_receiver.recv().await {
+            let _ = PrintCallback.on_update(update);
+        }
+    });
 
     let game = Game::join(
         env.contract_address,
         env.ws_url,
         player,
         BoardSize::Smaller(SmallerBoardSize::SixBySix),
-        Arc::new(print_callback.clone()),
+        updates_sender,
     )
     .await
     .unwrap_or_else(|err| {
@@ -203,7 +208,7 @@ async fn main() {
     {
         let game = game.lock().await;
         if let Some(opponent) = game.opponent() {
-            print_callback
+            PrintCallback
                 .on_update(GameUpdate::OpponentJoined { opponent })
                 .await;
         } else {
@@ -305,7 +310,7 @@ async fn main() {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PrintCallback;
 
 #[async_trait]

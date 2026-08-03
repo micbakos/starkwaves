@@ -3408,6 +3408,37 @@ impl<A: starknet_rust::accounts::ConnectedAccount + Sync> StarkwavesGenerated<A>
     }
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::too_many_arguments)]
+    pub fn exit_lobby_getcall(
+        &self,
+        board_size: &BoardSize,
+    ) -> starknet_rust::core::types::Call {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        __calldata.extend(BoardSize::cairo_serialize(board_size));
+        starknet_rust::core::types::Call {
+            to: self.address,
+            selector: starknet_rust::macros::selector!("exit_lobby"),
+            calldata: __calldata,
+        }
+    }
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn exit_lobby(
+        &self,
+        board_size: &BoardSize,
+    ) -> starknet_rust::accounts::ExecutionV3<A> {
+        use cainome::cairo_serde::CairoSerde;
+        let mut __calldata = vec![];
+        __calldata.extend(BoardSize::cairo_serialize(board_size));
+        let __call = starknet_rust::core::types::Call {
+            to: self.address,
+            selector: starknet_rust::macros::selector!("exit_lobby"),
+            calldata: __calldata,
+        };
+        self.account.execute_v3(vec![__call])
+    }
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::too_many_arguments)]
     pub fn renounce_ownership_getcall(&self) -> starknet_rust::core::types::Call {
         use cainome::cairo_serde::CairoSerde;
         let mut __calldata = vec![];

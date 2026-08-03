@@ -1,7 +1,11 @@
 use crate::app::services::Services;
 use crate::app::types::CoreState;
-use crate::app::types::Intent::{OnNav, OnShowToast};
-use crate::lobby::types::{AccountMenu, Effect, Intent, LobbyState, LobbyVariant, State};
+use crate::app::types::Intent::{OnAccountLoggedOut, OnGameUpdate, OnNav, OnShowToast};
+use crate::lobby::types::{
+    AccountMenu, Effect, ExitLobbyPopup, Intent, LobbyState, LobbyVariant, State,
+};
+use crate::popup::render_popup;
+use crate::types::error::TuiError;
 use crate::types::menu_iterable::MenuIterable;
 use crate::types::result::Result;
 use crate::types::screen::Screen;
@@ -13,13 +17,20 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::prelude::{Line, Style};
 use ratatui::widgets::{Block, Paragraph, Wrap};
-use starkwaves_client::game::game::Game;
+use starkwaves_client::game::game::{Game, GameUpdate};
 use starkwaves_client::types::board_size::BoardSize;
+use starkwaves_client::types::game_state::GameState;
 use starkwaves_client::types::lobby::Lobbies;
+use std::fmt::format;
 use std::sync::Arc;
+use std::time::Duration;
 use strum::VariantArray;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::time::sleep;
+
+use super::types::ExitLobbyPopupAction;
 
 pub struct LobbyScreen;
 
@@ -28,19 +39,14 @@ impl Screen for LobbyScreen {
     type Effect = Effect;
     type State = State;
 
-    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
-        Some(Intent::OnStart)
-    }
-
     fn reduce(
         state: &Self::State,
         intent: Self::Intent,
-        _core: &CoreState,
+        core: &CoreState,
     ) -> (Self::State, Vec<AppEffect>) {
         let mut new_state = state.clone();
         let mut effects = vec![];
         match intent {
-            Intent::OnStart => effects.push(Effect::RequestGetLobbies.into()),
             Intent::OnUpdateLobbyState(state) => new_state.lobby = state,
             Intent::OnSelectPreviousLobby => {
                 if let Some(lobby_variant) = new_state.selected_lobby {
@@ -79,7 +85,17 @@ impl Screen for LobbyScreen {
                 }
             }
             Intent::OnSelectionClicked => {
-                if let Some(item) = new_state.selected_account_menu_item {
+                if let Some(popup) = &state.exit_lobby_popup {
+                    match popup.selected_action {
+                        ExitLobbyPopupAction::Exit => {
+                            effects.push(Effect::RequestExitLobby(popup.lobby_size).into());
+                            new_state.exit_lobby_popup = None;
+                        }
+                        ExitLobbyPopupAction::Cancel => {
+                            new_state.exit_lobby_popup = None;
+                        }
+                    }
+                } else if let Some(item) = new_state.selected_account_menu_item {
                     match item {
                         AccountMenu::Copy => {
                             let address_text = state.account.address.to_fixed_hex_string();
@@ -89,7 +105,43 @@ impl Screen for LobbyScreen {
                             effects.push(Effect::RequestLogout.into());
                         }
                     }
-                } else if let Some(item) = new_state.selected_lobby {
+                } else if let Some(item) = new_state.selected_lobby
+                    && let Some(received) = state.lobby.as_received()
+                {
+                    let player_address = core
+                        .account
+                        .as_logged_in()
+                        .map(|a| a.address)
+                        .expect("Expected to be logged in");
+
+                    if let Some(lobby_size) = received.player_lobby(player_address) {
+                        new_state.exit_lobby_popup = Some(ExitLobbyPopup::new(lobby_size));
+                    } else {
+                        effects.push(Effect::RequestJoinLobby(item).into());
+                    }
+                }
+            }
+            Intent::OnTimeToRefreshLobbyState => {
+                effects.push(Effect::RequestGetLobbies.into());
+            }
+            Intent::OnJoinedLobby(board_size) => {
+                if let Some(lobbies_state) = new_state.lobby.as_received_mut() {
+                    lobbies_state.join(board_size, state.account.address)
+                }
+            }
+            Intent::OnSelectNextExitLobbyPopupMenuItem => {
+                if let Some(popup) = new_state.exit_lobby_popup.as_mut() {
+                    popup.selected_action = popup.selected_action.next();
+                }
+            }
+            Intent::OnSelectPrevExitLobbyPopupMenuItem => {
+                if let Some(popup) = new_state.exit_lobby_popup.as_mut() {
+                    popup.selected_action = popup.selected_action.prev();
+                }
+            }
+            Intent::OnExitedLobby(board_size) => {
+                if let Some(lobbies_state) = new_state.lobby.as_received_mut() {
+                    lobbies_state.exit(board_size);
                 }
             }
         }
@@ -132,11 +184,27 @@ impl Screen for LobbyScreen {
                     Some(Intent::OnSelectNextLobby)
                 }
             }
-            KeyCode::Right => Some(Intent::OnMoveFocusToAccount),
-            KeyCode::Left => Some(Intent::OnMoveFocusToLobby),
+            KeyCode::Right => {
+                if state.exit_lobby_popup.is_some() {
+                    Some(Intent::OnSelectNextExitLobbyPopupMenuItem)
+                } else {
+                    Some(Intent::OnMoveFocusToAccount)
+                }
+            }
+            KeyCode::Left => {
+                if state.exit_lobby_popup.is_some() {
+                    Some(Intent::OnSelectPrevExitLobbyPopupMenuItem)
+                } else {
+                    Some(Intent::OnMoveFocusToLobby)
+                }
+            }
             KeyCode::Enter => Some(Intent::OnSelectionClicked),
             _ => None,
         }
+    }
+
+    fn on_push_effect() -> Option<Self::Effect> {
+        Some(Effect::RequestGetLobbies)
     }
 
     async fn run(
@@ -157,19 +225,64 @@ impl Screen for LobbyScreen {
                         .unwrap_or_else(|| todo!("No player found, redirect to login"))
                 };
 
+                let player_address = player.address();
                 let result: Result<Lobbies> =
-                    Game::get_lobbies(services.on_chain.contract_address, player.as_ref())
+                    Game::get_lobbies(services.on_chain.contract_address, &player)
                         .await
                         .map_err(|e| e.into());
 
                 match result {
-                    Ok(lobbies) => intents
-                        .send(Intent::OnUpdateLobbyState(LobbyState::Received(lobbies)).into())?,
+                    Ok(lobbies) => {
+                        let no_in_game = services.in_game.read().unwrap().is_none();
+
+                        intents.send(
+                            Intent::OnUpdateLobbyState(LobbyState::Received(lobbies.clone()))
+                                .into(),
+                        )?;
+
+                        // In case we receive an update that the player is in lobby from probably
+                        // previous session (game handle doesn't exist yet),
+                        // start the request to await opponent and store game handle
+                        if let Some(board_size) = lobbies.player_lobby(player_address)
+                            && no_in_game
+                        {
+                            let on_chain = services.on_chain.clone();
+                            let (updates_sender, mut updates_receiver) =
+                                mpsc::unbounded_channel::<GameUpdate>();
+
+                            let intents_sender = intents.clone();
+                            tokio::spawn(async move {
+                                while let Some(update) = updates_receiver.recv().await {
+                                    intents_sender
+                                        .send(OnGameUpdate(update).into())
+                                        .expect("Expect game update to reach app");
+                                }
+                            });
+
+                            let game_handle = Game::await_opponent(
+                                on_chain.contract_address,
+                                on_chain.ws_url,
+                                player,
+                                board_size,
+                                updates_sender,
+                                None,
+                            )
+                            .await;
+
+                            {
+                                let mut game_guard = services.in_game.write().unwrap();
+                                *game_guard = Some(game_handle.clone());
+                            }
+                        }
+                    }
                     Err(e) => {
                         intents.send(Intent::OnUpdateLobbyState(LobbyState::Idle).into())?;
                         intents.send(OnShowToast(e.to_string()).into())?;
                     }
                 }
+
+                sleep(Duration::from_secs(5)).await;
+                intents.send(Intent::OnTimeToRefreshLobbyState.into())?;
             }
             Effect::RequestCopyToClipboard(message) => {
                 ClipboardContext::new()
@@ -189,9 +302,90 @@ impl Screen for LobbyScreen {
                     intents.send(OnShowToast(e.to_string()).into())?
                 } else {
                     let splash = crate::splash::types::State::new();
+                    intents.send(OnAccountLoggedOut.into())?;
                     intents.send(
                         OnNav(crate::types::nav::NavCommand::ResetTo(splash.into())).into(),
                     )?;
+                }
+            }
+            Effect::RequestJoinLobby(lobby_variant) => {
+                let board_size = BoardSize::from(lobby_variant);
+
+                let player = {
+                    let guard = services.player.read().unwrap();
+
+                    guard
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_else(|| todo!("No player found, redirect to login"))
+                };
+
+                let on_chain = services.on_chain.clone();
+
+                let (updates_sender, mut updates_receiver) =
+                    mpsc::unbounded_channel::<GameUpdate>();
+
+                let intents_sender = intents.clone();
+                tokio::spawn(async move {
+                    while let Some(update) = updates_receiver.recv().await {
+                        intents_sender
+                            .send(OnGameUpdate(update).into())
+                            .expect("Expect game update to reach app");
+                    }
+                });
+
+                let game_handle_result: Result<Arc<Mutex<Game>>> = Game::join(
+                    on_chain.contract_address,
+                    on_chain.ws_url,
+                    player,
+                    board_size,
+                    updates_sender,
+                )
+                .await
+                .map_err(|e| e.into());
+
+                match game_handle_result {
+                    Ok(game_handle) => {
+                        {
+                            let mut game_guard = services.in_game.write().unwrap();
+                            *game_guard = Some(game_handle.clone());
+                        }
+
+                        let game = game_handle.lock().await;
+                        match game.state() {
+                            GameState::InLobby(board_size) => {
+                                intents.send(Intent::OnJoinedLobby(board_size).into())?;
+                            }
+                            GameState::InGame(game_data) => {}
+                        }
+                    }
+                    Err(err) => {
+                        intents
+                            .send(OnShowToast(format!("Unable to join game. {}", err)).into())?;
+                    }
+                }
+            }
+            Effect::RequestExitLobby(board_size) => {
+                let game_handle = services
+                    .in_game
+                    .read()
+                    .unwrap()
+                    .clone()
+                    .expect("Game instance should exist");
+                let game = game_handle.lock().await;
+
+                if let Err(error) = game
+                    .exit_lobby(&board_size)
+                    .await
+                    .map_err(Into::<TuiError>::into)
+                {
+                    intents.send(OnShowToast(format!("Unable to exit lobby. {}", error)).into())?;
+                } else {
+                    {
+                        let mut game_guard = services.in_game.write().unwrap();
+                        *game_guard = None;
+                    }
+                    intents.send(Intent::OnExitedLobby(board_size).into())?;
                 }
             }
         }
@@ -291,12 +485,12 @@ fn render_lobbies(state: &State, frame: &mut Frame, lobbies_area: Rect) {
                     .areas(per_variant_area[index]);
 
             let size_label = match variant {
-                LobbyVariant::Six => "Small • (6x6)",
-                LobbyVariant::Eight => "Small • (8x8)",
-                LobbyVariant::Ten => "Normal • (10x10)",
-                LobbyVariant::Twelve => "Large • (12x12)",
-                LobbyVariant::Fourteen => "Large • (14x14)",
-                LobbyVariant::Twenty => "Large • (20x20)",
+                LobbyVariant::Six => "(6 x 6) • Small",
+                LobbyVariant::Eight => "(8 x 8) • Small",
+                LobbyVariant::Ten => "(10x10) • Normal",
+                LobbyVariant::Twelve => "(12x12) • Large",
+                LobbyVariant::Fourteen => "(14x14) • Large",
+                LobbyVariant::Twenty => "(20x20) • Large",
             }
             .to_string();
 
@@ -305,7 +499,11 @@ fn render_lobbies(state: &State, frame: &mut Frame, lobbies_area: Rect) {
                 LobbyState::Resolving => "Resolving players...".to_string(),
                 LobbyState::Received(lobbies) => {
                     if let Some(player) = lobbies.lobby((*variant).into()) {
-                        player.0.to_fixed_hex_string()
+                        if player == state.account.address {
+                            "Awaiting opponent...".to_string()
+                        } else {
+                            player.to_fixed_hex_string()
+                        }
                     } else {
                         "Empty Lobby".to_string()
                     }
@@ -323,6 +521,17 @@ fn render_lobbies(state: &State, frame: &mut Frame, lobbies_area: Rect) {
             frame.render_widget(Line::raw(size_label).style(style), size);
             frame.render_widget(Line::raw(player_label).style(style).right_aligned(), player);
         });
+
+    if let Some(popup) = &state.exit_lobby_popup {
+        render_popup(
+            frame,
+            lobbies_area,
+            Some("Exit Lobby?"),
+            format!("You are about to exit lobby {}", popup.lobby_size),
+            &popup.selected_action,
+            ExitLobbyPopupAction::VARIANTS,
+        );
+    }
 }
 
 fn render_memo(state: &State, frame: &mut Frame, memo_area: Rect) {

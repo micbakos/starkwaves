@@ -17,7 +17,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use url::Url;
 
-pub const CONTRACT_PATH: &str = "../contract";
+pub const CONTRACT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../contract");
 const CONTRACT_FILE_NAME: &str = "starkwaves_Starkwaves";
 const COMPILED_CONTRACT_SUFFIX: &str = "compiled_contract_class.json";
 const SIERRA_CONTRACT_SUFFIX: &str = "contract_class.json";
@@ -38,8 +38,13 @@ impl Config {
         dotenv().ok();
         let preset =
             env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
-        let env_path = PathBuf::from(format!("../.env.{}", preset));
-        dotenv::from_filename(env_path.as_path()).ok();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("client crate has a parent dir");
+        let env_path = root.join(format!(".env.{}", preset));
+        if dotenv::from_filename(env_path.as_path()).is_err() {
+            eprintln!("warning: could not load {}", env_path.display());
+        }
 
         let rpc_url = env::var("DEPLOY_RPC_URL").map_err(|_| "DEPLOY_RPC_URL must be set")?;
 

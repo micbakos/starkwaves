@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use crate::app::services::Services;
+use crate::app::types::AccountState;
 use crate::app::types::Effect::RequestNav;
 use crate::onboard::start::types::{Effect, Intent, Menu, State};
 use crate::types::AppEffect;
@@ -11,10 +12,10 @@ use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use std::sync::Arc;
 use strum::VariantArray;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
-use crate::app::services::Services;
+use tokio::sync::mpsc::error::SendError;
 
 pub struct StartScreen;
 
@@ -33,19 +34,20 @@ impl Screen for StartScreen {
         match intent {
             Intent::OnPressDown => new_state.press_down(),
             Intent::OnPressUp => new_state.press_up(),
-            Intent::OnSelect => {
-                match state.selected_button {
-                    Menu::Start => {
-                        if core.account.is_none() {
-                            let login_screen_state = crate::login::types::State::new();
-                            effects.push(RequestNav(NavCommand::Push(login_screen_state.into())).into())
-                        } else {
-                            // Open lobby
-                        }
+            Intent::OnSelect => match state.selected_button {
+                Menu::Start => {
+                    if let AccountState::LoggedIn(logged_account) = &core.account {
+                        let lobby_screen_state =
+                            crate::lobby::types::State::new(logged_account.clone());
+                        effects
+                            .push(RequestNav(NavCommand::ResetTo(lobby_screen_state.into())).into())
+                    } else {
+                        let login_screen_state = crate::login::types::State::new();
+                        effects.push(RequestNav(NavCommand::Push(login_screen_state.into())).into())
                     }
-                    Menu::Quit => effects.push(crate::app::types::Effect::RequestQuit.into()),
                 }
-            }
+                Menu::Quit => effects.push(crate::app::types::Effect::RequestQuit.into()),
+            },
         };
 
         (new_state, effects)
@@ -102,7 +104,7 @@ impl Screen for StartScreen {
     async fn run(
         _effect: Self::Effect,
         services: Arc<Services>,
-        _intents: UnboundedSender<AppIntent>
+        _intents: UnboundedSender<AppIntent>,
     ) -> std::result::Result<(), SendError<AppIntent>> {
         Ok(())
     }

@@ -3,6 +3,8 @@ use crate::types::{BoardSize, FireStatus, Lobbies, Lobby, Ship};
 
 #[starknet::interface]
 pub trait IStarkwaves<TContractState> {
+    fn exit_lobby(ref self: TContractState, board_size: BoardSize);
+
     fn request_start_game(ref self: TContractState, board_size: BoardSize) -> Option<felt252>;
 
     fn commit_board(ref self: TContractState, root: felt252, game_id: felt252);
@@ -84,6 +86,16 @@ pub mod Starkwaves {
 
     #[abi(embed_v0)]
     impl StarkwavesImpl of super::IStarkwaves<ContractState> {
+        fn exit_lobby(ref self: ContractState, board_size: BoardSize) {
+            let player = get_caller_address();
+            let size = board_size.size();
+            let some_player = self.open_lobbies.entry(size).read();
+
+            assert!(player == some_player, "Player {:?} is not in lobby {}", player, board_size);
+
+            self.open_lobbies.entry(size).write(Zero::zero());
+        }
+
         fn request_start_game(ref self: ContractState, board_size: BoardSize) -> Option<felt252> {
             let player = get_caller_address();
 

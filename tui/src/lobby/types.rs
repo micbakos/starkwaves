@@ -1,15 +1,18 @@
-use enum_as_inner::EnumAsInner;
-use starkwaves_client::types::lobby::Lobbies;
-use strum::VariantArray;
-use starkwaves_client::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+use crate::app::services::OnChainData;
 use crate::app::types::LoggedAccount;
+use crate::types::result::Result;
+use enum_as_inner::EnumAsInner;
+use starkwaves_client::types::board_size::{BoardSize, LargerBoardSize, SmallerBoardSize};
+use starkwaves_client::types::lobby::Lobbies;
+use strum::{EnumMessage, VariantArray};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     pub lobby: LobbyState,
     pub selected_lobby: Option<LobbyVariant>,
     pub selected_account_menu_item: Option<AccountMenu>,
-    pub account: LoggedAccount
+    pub exit_lobby_popup: Option<ExitLobbyPopup>,
+    pub account: LoggedAccount,
 }
 
 impl State {
@@ -18,17 +21,17 @@ impl State {
             lobby: LobbyState::Idle,
             selected_lobby: None,
             selected_account_menu_item: None,
-            account
+            exit_lobby_popup: None,
+            account,
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum LobbyState {
     Idle,
     Resolving,
-    Received(Lobbies)
+    Received(Lobbies),
 }
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray)]
@@ -38,7 +41,7 @@ pub enum LobbyVariant {
     Ten,
     Twelve,
     Fourteen,
-    Twenty
+    Twenty,
 }
 
 impl From<LobbyVariant> for BoardSize {
@@ -49,7 +52,7 @@ impl From<LobbyVariant> for BoardSize {
             LobbyVariant::Ten => Self::Standard,
             LobbyVariant::Twelve => Self::Larger(LargerBoardSize::TwelveByTwelve),
             LobbyVariant::Fourteen => Self::Larger(LargerBoardSize::FourteenByFourteen),
-            LobbyVariant::Twenty => Self::Larger(LargerBoardSize::TwentyByTwenty)
+            LobbyVariant::Twenty => Self::Larger(LargerBoardSize::TwentyByTwenty),
         }
     }
 }
@@ -57,23 +60,52 @@ impl From<LobbyVariant> for BoardSize {
 #[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray)]
 pub enum AccountMenu {
     Copy,
-    Logout
+    Logout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExitLobbyPopup {
+    pub lobby_size: BoardSize,
+    pub selected_action: ExitLobbyPopupAction,
+}
+
+impl ExitLobbyPopup {
+    pub fn new(lobby_size: BoardSize) -> Self {
+        Self {
+            lobby_size,
+            selected_action: ExitLobbyPopupAction::Exit,
+        }
+    }
+}
+
+#[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray, EnumMessage)]
+pub enum ExitLobbyPopupAction {
+    #[strum(message = "Exit")]
+    Exit,
+    #[strum(message = "Cancel")]
+    Cancel,
 }
 
 pub enum Intent {
-    OnStart,
+    OnTimeToRefreshLobbyState,
     OnUpdateLobbyState(LobbyState),
+    OnJoinedLobby(BoardSize),
+    OnExitedLobby(BoardSize),
     OnSelectPreviousLobby,
     OnSelectNextLobby,
     OnMoveFocusToAccount,
     OnMoveFocusToLobby,
     OnSelectNextAccountMenuItem,
     OnSelectPrevAccountMenuItem,
-    OnSelectionClicked
+    OnSelectNextExitLobbyPopupMenuItem,
+    OnSelectPrevExitLobbyPopupMenuItem,
+    OnSelectionClicked,
 }
 
 pub enum Effect {
     RequestGetLobbies,
+    RequestJoinLobby(LobbyVariant),
+    RequestExitLobby(BoardSize),
     RequestCopyToClipboard(String),
     RequestLogout,
 }

@@ -26,7 +26,11 @@ pub trait Screen {
 
     fn on_key(key: KeyEvent, state: &Self::State) -> Option<Self::Intent>;
 
-    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
+    fn on_push_effect() -> Option<Self::Effect> {
+        None
+    }
+
+    fn on_pop_effect() -> Option<Self::Effect> {
         None
     }
 

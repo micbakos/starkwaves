@@ -86,6 +86,9 @@ pub enum GameError {
 
     #[error("Could not deserialize type `{}` from {}", 0, serde_json::to_string(&1).unwrap())]
     DeserializationError(String, Vec<Felt>),
+
+    #[error("Could not send update")]
+    SendUpdateError,
 }
 
 #[derive(Debug, ThisError)]

@@ -1,9 +1,6 @@
-use std::path::PathBuf;
 use crate::types::menu_iterable::MenuIterable;
-use strum::VariantArray;
-use starkwaves_client::types::account::cartridge_account::CartridgeAccount;
-use starkwaves_client::types::result::Result;
-use crate::app::types::LoggedAccount;
+use std::path::PathBuf;
+use strum::{EnumMessage, VariantArray};
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray)]
 pub enum LoginOption {
@@ -12,15 +9,17 @@ pub enum LoginOption {
     Cartridge,
 }
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, VariantArray, EnumMessage)]
 pub enum CliPopupAction {
+    #[strum(message = "Download")]
     Download,
-    Cancel
+    #[strum(message = "Cancel")]
+    Cancel,
 }
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq)]
 pub struct CliPopup {
-    pub action: CliPopupAction
+    pub action: CliPopupAction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,5 +79,5 @@ pub enum Intent {
 pub enum Effect {
     RequestLoginWithCartridge(PathBuf),
     #[cfg(debug_assertions)]
-    RequestLoginWithPrivateKeyFromEnv
+    RequestLoginWithPrivateKeyFromEnv,
 }

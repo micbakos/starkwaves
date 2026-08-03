@@ -58,10 +58,18 @@ macro_rules! screens {
             }
         )+
 
-        pub fn screens_on_start(state: &ScreenState) -> Option<ScreenIntent> {
-            match state {
+        pub fn screens_on_push_effect(state: &ScreenState) -> Option<AppEffect> {
+            match (state) {
                 $(
-                    ScreenState::$screen_name(screen_state) => <$screen_path as crate::types::screen::Screen>::on_start(screen_state).map(Into::into),
+                    ScreenState::$screen_name(_) => <$screen_path as crate::types::screen::Screen>::on_push_effect().map(Into::into),
+                )+
+            }
+        }
+
+        pub fn screens_on_pop_effect(state: &ScreenState) -> Option<AppEffect> {
+            match (state) {
+                $(
+                    ScreenState::$screen_name(_) => <$screen_path as crate::types::screen::Screen>::on_pop_effect().map(Into::into),
                 )+
             }
         }
@@ -87,7 +95,7 @@ macro_rules! screens {
 
                             (screen_state.into(), effects)
                         } else {
-                            panic!("Received {} intent but not {} state", stringify!($screen_name), stringify!($screen_name));
+                            (top_screen_state, vec![])
                         }
                     },
                 )+

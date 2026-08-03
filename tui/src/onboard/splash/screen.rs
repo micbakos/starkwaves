@@ -1,7 +1,6 @@
 use crate::app::services::Services;
 use crate::app::types::CoreState;
 use crate::app::types::Intent::{OnAccountLoggedIn, OnNav, OnShowToast};
-use crate::lobby::types::Intent::OnStart;
 use crate::onboard::splash::types::{Effect, Intent, State};
 use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
@@ -22,25 +21,12 @@ impl Screen for SplashScreen {
     type Effect = Effect;
     type State = State;
 
-    fn on_start(_with_state: &Self::State) -> Option<Self::Intent> {
-        Some(Intent::OnStart)
-    }
-
     fn reduce(
         state: &Self::State,
-        intent: Self::Intent,
+        _intent: Self::Intent,
         _core: &CoreState,
     ) -> (Self::State, Vec<AppEffect>) {
-        let mut new_state = state.clone();
-        let mut effects = vec![];
-
-        match intent {
-            Intent::OnStart => {
-                effects.push(Effect::RequestResolveStoredSession.into());
-            }
-        }
-
-        (new_state, effects)
+        (state.clone(), vec![])
     }
 
     fn render(_state: &Self::State, _core: &CoreState, frame: &mut Frame, area: Rect) {
@@ -54,6 +40,10 @@ impl Screen for SplashScreen {
 
     fn on_key(_key: KeyEvent, _state: &Self::State) -> Option<Self::Intent> {
         None
+    }
+
+    fn on_push_effect() -> Option<Self::Effect> {
+        Some(Effect::RequestResolveStoredSession)
     }
 
     async fn run(
