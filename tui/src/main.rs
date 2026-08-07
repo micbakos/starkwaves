@@ -13,13 +13,17 @@ use crate::types::screen::Screen;
 use crate::types::{AppState, screens_on_key, screens_on_push_effect};
 use color_eyre::eyre::eyre;
 use crossterm::event::Event;
+use dirs::cache_dir;
 use dotenv::dotenv;
+use log::LevelFilter;
 use onboard::login;
 use ratatui::DefaultTerminal;
+use simplelog::{Config, WriteLogger};
 use starknet_rust_core::chain_id;
 use starknet_rust_core::types::Felt;
 use starknet_rust_core::utils::cairo_short_string_to_felt;
 use std::env;
+use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
@@ -34,6 +38,10 @@ async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
     let preset = env::var("PRESET").unwrap_or_else(|_| "Should have PRESET in .env".to_string());
     dotenv::from_filename(format!(".env.{}", preset)).ok();
+
+    if cfg!(debug_assertions) {
+        install_file_logger();
+    }
 
     let contract_address = env::var("CONTRACT_ADDR")
         .map(|a| Felt::from_hex(a.as_str()).expect("Invalid CONTRACT_ADDR"))
@@ -108,7 +116,7 @@ async fn run(mut terminal: DefaultTerminal, on_chain_data: OnChainData) -> Resul
         .screens
         .front()
         .expect("Expected first screen to exist in stack.");
-    let push_effect = screens_on_push_effect(&top_screen)
+    let push_effect = screens_on_push_effect(top_screen)
         .expect("Expected first screen to listen for push effect.");
     effects_sender.send(vec![push_effect])?;
 
@@ -163,4 +171,37 @@ fn observe_keys(
             }
         }
     });
+}
+
+#[cfg(debug_assertions)]
+fn install_file_logger() {
+    use log::Level;
+    use simplelog::{Color, ConfigBuilder, ThreadLogMode};
+
+    use crate::app::storage::StoredSession;
+
+    let project_dir = StoredSession::project_dir();
+    let cache_dir = project_dir.cache_dir();
+    if !cache_dir.exists() {
+        use std::fs::create_dir;
+
+        create_dir(cache_dir).expect("Expected cache directory to be created (for logging).");
+    }
+    let file = File::create(cache_dir.join("runtime.log"))
+        .expect("Expected to create runtime.log file (for logging).");
+
+    let config = ConfigBuilder::new()
+        .set_level_color(Level::Trace, Some(Color::White))
+        .set_level_color(Level::Debug, Some(Color::Cyan))
+        .set_level_color(Level::Info, Some(Color::Green))
+        .set_level_color(Level::Warn, Some(Color::Yellow))
+        .set_level_color(Level::Error, Some(Color::Red))
+        .set_thread_mode(ThreadLogMode::Names)
+        .set_thread_level(LevelFilter::Off)
+        .set_location_level(LevelFilter::Off)
+        .set_target_level(LevelFilter::Off)
+        .set_time_offset_to_local()
+        .map(|b| b.build())
+        .unwrap();
+    let _ = WriteLogger::init(LevelFilter::Trace, config, file);
 }

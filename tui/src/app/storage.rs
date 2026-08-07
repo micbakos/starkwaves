@@ -14,16 +14,11 @@ pub struct StoredSession {
     pub tui_version: String,
     pub contract_address: Felt,
     pub chain_id: Felt,
-    pub account: StoredAccount
+    pub account: StoredAccount,
 }
 
 impl StoredSession {
-
-    pub fn new(
-        contract_address: Felt,
-        chain_id: Felt,
-        account: StoredAccount
-    ) -> Self {
+    pub fn new(contract_address: Felt, chain_id: Felt, account: StoredAccount) -> Self {
         Self {
             tui_version: env!("CARGO_PKG_VERSION").to_string(),
             contract_address,
@@ -38,11 +33,9 @@ impl StoredSession {
 
         let data_file = File::open(data_dir.join(DATA_FILE))
             .map(|f| Some(f))
-            .or_else(|e| {
-                match e.kind() {
-                    ErrorKind::NotFound => Ok(None),
-                    _ => Err(TuiError::FailedToReadFromStorage(e.to_string())),
-                }
+            .or_else(|e| match e.kind() {
+                ErrorKind::NotFound => Ok(None),
+                _ => Err(TuiError::FailedToReadFromStorage(e.to_string())),
             })?;
 
         if let Some(data_file) = data_file {
@@ -62,9 +55,12 @@ impl StoredSession {
             create_dir(data_dir).map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
         }
 
-        let value = serde_json::to_string(self).map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
-        let mut file = File::create(data_dir.join(DATA_FILE)).map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
-        file.write_all(&value.as_bytes()).map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
+        let value = serde_json::to_string(self)
+            .map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
+        let mut file = File::create(data_dir.join(DATA_FILE))
+            .map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
+        file.write_all(&value.as_bytes())
+            .map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))?;
 
         Ok(())
     }
@@ -72,10 +68,11 @@ impl StoredSession {
     pub fn delete() -> Result<()> {
         let dir = Self::project_dir();
         let data_dir = dir.data_dir();
-        remove_file(data_dir.join(DATA_FILE)).map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))
+        remove_file(data_dir.join(DATA_FILE))
+            .map_err(|e| TuiError::FailedToWriteToStorage(e.to_string()))
     }
 
-    fn project_dir() -> ProjectDirs {
+    pub fn project_dir() -> ProjectDirs {
         ProjectDirs::from("com", "starkwaves", "tui").unwrap()
     }
 }
@@ -101,7 +98,7 @@ impl Into<LoggedAccount> for StoredAccount {
 pub enum StoredAccountKind {
     Cartridge,
     #[cfg(debug_assertions)]
-    Env
+    Env,
 }
 
 impl Into<AccountKind> for StoredAccountKind {
