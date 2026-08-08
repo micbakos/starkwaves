@@ -6,6 +6,7 @@ use crate::types::nav::NavCommand;
 use crate::types::screen::Screen;
 use crate::types::{AppEffect, AppIntent};
 use crossterm::event::KeyEvent;
+use log::debug;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::Stylize;

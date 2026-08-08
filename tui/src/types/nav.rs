@@ -1,9 +1,12 @@
 use std::collections::VecDeque;
 
+use log::debug;
+
 use crate::{
     app::types::Effect::RequestSettleNav,
     types::{
-        AppEffect, AppState, ScreenKind, ScreenState, screens_on_pop_effect, screens_on_push_effect,
+        AppEffect, AppState, ScreenKind, ScreenState, screens_name, screens_on_pop_effect,
+        screens_on_push_effect,
     },
 };
 

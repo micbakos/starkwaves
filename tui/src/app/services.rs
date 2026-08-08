@@ -14,8 +14,8 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub struct Services {
     pub on_chain: OnChainData,
     pub player: RwLock<Option<Arc<dyn GameAccount>>>,
     pub in_game: RwLock<Option<Arc<Mutex<Game>>>>,
-    pub lobby_polling: Option<JoinHandle<()>>,
+    pub lobby_polling: RwLock<Option<JoinHandle<()>>>,
 }
 
 impl Services {
@@ -65,7 +65,7 @@ impl Services {
             on_chain: on_chain_data,
             player: RwLock::new(None),
             in_game: RwLock::new(None),
-            lobby_polling: None,
+            lobby_polling: RwLock::new(None),
         }
     }
 

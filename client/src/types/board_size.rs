@@ -3,7 +3,7 @@ use derive_more::Display;
 use starknet_rust::core::codec::Encode;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode, Hash)]
 pub enum BoardSize {
     // 10x10
     #[display("10x10")]
@@ -23,6 +23,17 @@ impl BoardSize {
             BoardSize::Smaller(smaller) => smaller.size(),
             BoardSize::Larger(larger) => larger.size(),
         }
+    }
+
+    pub fn all() -> Vec<BoardSize> {
+        vec![
+            Self::Smaller(SmallerBoardSize::SixBySix),
+            Self::Smaller(SmallerBoardSize::EightByEight),
+            Self::Standard,
+            Self::Larger(LargerBoardSize::TwelveByTwelve),
+            Self::Larger(LargerBoardSize::FourteenByFourteen),
+            Self::Larger(LargerBoardSize::TwentyByTwenty),
+        ]
     }
 
     pub fn eligible_ship_kinds(&self) -> HashSet<ShipKind> {
@@ -72,7 +83,7 @@ impl Default for BoardSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode, Hash)]
 pub enum SmallerBoardSize {
     #[display("6x6")]
     SixBySix,
@@ -89,7 +100,7 @@ impl SmallerBoardSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Encode, Hash)]
 pub enum LargerBoardSize {
     #[display("12x12")]
     TwelveByTwelve,

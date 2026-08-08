@@ -13,6 +13,7 @@ use crate::types::{AppEffect, AppIntent};
 use crate::utils::{format_address_felt, window_ratio};
 use clipboard_rs::{Clipboard, ClipboardContext};
 use crossterm::event::{KeyCode, KeyEvent};
+use log::debug;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::prelude::{Line, Style};
@@ -21,13 +22,13 @@ use starkwaves_client::game::game::{Game, GameUpdate};
 use starkwaves_client::types::board_size::BoardSize;
 use starkwaves_client::types::game_state::GameState;
 use starkwaves_client::types::lobby::Lobbies;
-use std::fmt::format;
 use std::sync::Arc;
 use std::time::Duration;
 use strum::VariantArray;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
 use super::types::ExitLobbyPopupAction;
@@ -122,7 +123,7 @@ impl Screen for LobbyScreen {
                 }
             }
             Intent::OnTimeToRefreshLobbyState => {
-                effects.push(Effect::RequestGetLobbies.into());
+                effects.push(Effect::StartPollingLobbies.into());
             }
             Intent::OnJoinedLobby(board_size) => {
                 if let Some(lobbies_state) = new_state.lobby.as_received_mut() {
@@ -204,7 +205,11 @@ impl Screen for LobbyScreen {
     }
 
     fn on_push_effect() -> Option<Self::Effect> {
-        Some(Effect::RequestGetLobbies)
+        Some(Effect::StartPollingLobbies)
+    }
+
+    fn on_pop_effect() -> Option<Self::Effect> {
+        Some(Effect::StopPollingLobbies)
     }
 
     async fn run(
@@ -213,76 +218,11 @@ impl Screen for LobbyScreen {
         intents: UnboundedSender<AppIntent>,
     ) -> std::result::Result<(), SendError<AppIntent>> {
         match effect {
-            Effect::RequestGetLobbies => {
-                intents.send(Intent::OnUpdateLobbyState(LobbyState::Resolving).into())?;
-
-                let player = {
-                    let player_guard = services.player.read().unwrap();
-
-                    player_guard
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_else(|| todo!("No player found, redirect to login"))
-                };
-
-                let player_address = player.address();
-                let result: Result<Lobbies> =
-                    Game::get_lobbies(services.on_chain.contract_address, &player)
-                        .await
-                        .map_err(|e| e.into());
-
-                match result {
-                    Ok(lobbies) => {
-                        let no_in_game = services.in_game.read().unwrap().is_none();
-
-                        intents.send(
-                            Intent::OnUpdateLobbyState(LobbyState::Received(lobbies.clone()))
-                                .into(),
-                        )?;
-
-                        // In case we receive an update that the player is in lobby from probably
-                        // previous session (game handle doesn't exist yet),
-                        // start the request to await opponent and store game handle
-                        if let Some(board_size) = lobbies.player_lobby(player_address)
-                            && no_in_game
-                        {
-                            let on_chain = services.on_chain.clone();
-                            let (updates_sender, mut updates_receiver) =
-                                mpsc::unbounded_channel::<GameUpdate>();
-
-                            let intents_sender = intents.clone();
-                            tokio::spawn(async move {
-                                while let Some(update) = updates_receiver.recv().await {
-                                    intents_sender
-                                        .send(OnGameUpdate(update).into())
-                                        .expect("Expect game update to reach app");
-                                }
-                            });
-
-                            let game_handle = Game::await_opponent(
-                                on_chain.contract_address,
-                                on_chain.ws_url,
-                                player,
-                                board_size,
-                                updates_sender,
-                                None,
-                            )
-                            .await;
-
-                            {
-                                let mut game_guard = services.in_game.write().unwrap();
-                                *game_guard = Some(game_handle.clone());
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        intents.send(Intent::OnUpdateLobbyState(LobbyState::Idle).into())?;
-                        intents.send(OnShowToast(e.to_string()).into())?;
-                    }
-                }
-
-                sleep(Duration::from_secs(5)).await;
-                intents.send(Intent::OnTimeToRefreshLobbyState.into())?;
+            Effect::StartPollingLobbies => {
+                start_lobbies_polling(services, intents);
+            }
+            Effect::StopPollingLobbies => {
+                stop_lobbies_polling(services);
             }
             Effect::RequestCopyToClipboard(message) => {
                 ClipboardContext::new()
@@ -309,6 +249,8 @@ impl Screen for LobbyScreen {
                 }
             }
             Effect::RequestJoinLobby(lobby_variant) => {
+                stop_lobbies_polling(services.clone());
+
                 let board_size = BoardSize::from(lobby_variant);
 
                 let player = {
@@ -355,6 +297,7 @@ impl Screen for LobbyScreen {
                         match game.state() {
                             GameState::InLobby(board_size) => {
                                 intents.send(Intent::OnJoinedLobby(board_size).into())?;
+                                start_lobbies_polling(services, intents);
                             }
                             GameState::InGame(game_data) => {}
                         }
@@ -362,10 +305,12 @@ impl Screen for LobbyScreen {
                     Err(err) => {
                         intents
                             .send(OnShowToast(format!("Unable to join game. {}", err)).into())?;
+                        start_lobbies_polling(services, intents);
                     }
                 }
             }
             Effect::RequestExitLobby(board_size) => {
+                stop_lobbies_polling(services.clone());
                 let game_handle = services
                     .in_game
                     .read()
@@ -387,6 +332,7 @@ impl Screen for LobbyScreen {
                     }
                     intents.send(Intent::OnExitedLobby(board_size).into())?;
                 }
+                start_lobbies_polling(services, intents);
             }
         }
 
@@ -574,4 +520,97 @@ fn ships_memo(board_size: BoardSize) -> Vec<String> {
             format!("{} x {}", count, name).to_string()
         })
         .collect()
+}
+
+fn start_lobbies_polling(services: Arc<Services>, intents: UnboundedSender<AppIntent>) {
+    let mut handle_guard = services.lobby_polling.write().unwrap();
+    if handle_guard.is_some() {
+        debug!("Lobby polling already present");
+        return;
+    }
+
+    debug!("Start polling lobbies");
+    let handle = poll_lobbies(services.clone(), intents);
+    *handle_guard = Some(handle);
+}
+
+fn stop_lobbies_polling(services: Arc<Services>) {
+    if let Some(lobby_polling_guard) = services.lobby_polling.write().unwrap().take() {
+        debug!("Stop polling lobbies");
+        lobby_polling_guard.abort();
+    }
+}
+
+fn poll_lobbies(services: Arc<Services>, intents: UnboundedSender<AppIntent>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            intents.send(Intent::OnUpdateLobbyState(LobbyState::Resolving).into());
+
+            let player = {
+                let player_guard = services.player.read().unwrap();
+
+                player_guard
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| todo!("No player found, redirect to login"))
+            };
+
+            let player_address = player.address();
+            let result: Result<Lobbies> =
+                Game::get_lobbies(services.on_chain.contract_address, &player)
+                    .await
+                    .map_err(|e| e.into());
+
+            match result {
+                Ok(lobbies) => {
+                    let no_in_game = services.in_game.read().unwrap().is_none();
+
+                    intents.send(
+                        Intent::OnUpdateLobbyState(LobbyState::Received(lobbies.clone())).into(),
+                    );
+
+                    // In case we receive an update that the player is in lobby from probably
+                    // previous session (game handle doesn't exist yet),
+                    // start the request to await opponent and store game handle
+                    if let Some(board_size) = lobbies.player_lobby(player_address)
+                        && no_in_game
+                    {
+                        let on_chain = services.on_chain.clone();
+                        let (updates_sender, mut updates_receiver) =
+                            mpsc::unbounded_channel::<GameUpdate>();
+
+                        let intents_sender = intents.clone();
+                        tokio::spawn(async move {
+                            while let Some(update) = updates_receiver.recv().await {
+                                intents_sender
+                                    .send(OnGameUpdate(update).into())
+                                    .expect("Expect game update to reach app");
+                            }
+                        });
+
+                        let game_handle = Game::await_opponent(
+                            on_chain.contract_address,
+                            on_chain.ws_url,
+                            player,
+                            board_size,
+                            updates_sender,
+                            None,
+                        )
+                        .await;
+
+                        {
+                            let mut game_guard = services.in_game.write().unwrap();
+                            *game_guard = Some(game_handle.clone());
+                        }
+                    }
+                }
+                Err(e) => {
+                    intents.send(Intent::OnUpdateLobbyState(LobbyState::Idle).into());
+                    intents.send(OnShowToast(e.to_string()).into());
+                }
+            }
+
+            sleep(Duration::from_secs(5)).await;
+        }
+    })
 }

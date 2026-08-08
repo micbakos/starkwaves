@@ -10,6 +10,7 @@ async-trait = { workspace = true }
 ratatui = { version = "0.30.1", features = ["unstable-rendered-line-info"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 log = { workspace = true }
 simplelog = { workspace = true }
 color-eyre = "0.6"

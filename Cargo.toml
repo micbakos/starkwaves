@@ -10,6 +10,7 @@ cainome-cairo-serde = { path = "patches/cainome-cairo-serde" }
 enum-as-inner = "0.6.1"
 async-trait = "0.1.89"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "rt", "time", "process", "fs", "io-util"] }
+tokio-util = "0.7.19"
 log = "0.4.29"
 simplelog = "0.12"
 starknet-rust = "0.19.0"

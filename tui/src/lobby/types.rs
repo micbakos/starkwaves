@@ -103,7 +103,8 @@ pub enum Intent {
 }
 
 pub enum Effect {
-    RequestGetLobbies,
+    StartPollingLobbies,
+    StopPollingLobbies,
     RequestJoinLobby(LobbyVariant),
     RequestExitLobby(BoardSize),
     RequestCopyToClipboard(String),

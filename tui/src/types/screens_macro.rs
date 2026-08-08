@@ -129,5 +129,15 @@ macro_rules! screens {
 
             Ok(())
         }
+
+        pub fn screens_name(
+            state: &ScreenState
+        ) -> &'static str {
+            match state {
+                $(
+                    ScreenState::$screen_name(_) => stringify!($screen_name),
+                )+
+            }
+        }
     };
 }

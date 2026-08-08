@@ -1177,8 +1177,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "lobby",
-                            "PlayerEntererLobby", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "lobby",
+                            "PlayerEntererLobby",
+                            e,
                         ),
                     );
                 }
@@ -1192,8 +1194,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player",
-                            "PlayerEntererLobby", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player",
+                            "PlayerEntererLobby",
+                            e,
                         ),
                     );
                 }
@@ -1224,8 +1228,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1239,8 +1245,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1257,8 +1265,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1275,8 +1285,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "board_size",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "board_size",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1306,8 +1318,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -1321,8 +1335,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "attacker",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "attacker",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -1339,8 +1355,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "defender",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "defender",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -1372,8 +1390,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "Attack", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -1387,8 +1407,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player",
-                            "Attack", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -1400,8 +1422,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "x", "Attack",
-                            e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "x",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -1412,8 +1436,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "y", "Attack",
-                            e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "y",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -1443,8 +1469,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1458,8 +1486,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "attacker",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "attacker",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1476,8 +1506,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "defender",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "defender",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1491,8 +1523,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "x",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "x",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1503,8 +1537,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "y",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "y",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1515,8 +1551,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "hit",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "hit",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1530,7 +1568,9 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "destroyed_ship_kind", "AttackResult", e
+                            "destroyed_ship_kind",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -1566,8 +1606,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -1581,8 +1623,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -1599,8 +1643,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -1632,8 +1678,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -1647,8 +1695,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -1665,8 +1715,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -1680,8 +1732,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "outcome",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "outcome",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -1711,8 +1765,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "Reset", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Reset",
+                            e,
                         ),
                     );
                 }
@@ -1723,8 +1779,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "timestamp",
-                            "Reset", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "timestamp",
+                            "Reset",
+                            e,
                         ),
                     );
                 }
@@ -1750,7 +1808,9 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferred", e
+                            "previous_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -1767,8 +1827,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferred", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -1804,7 +1866,9 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferStarted", e
+                            "previous_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -1821,8 +1885,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -1864,8 +1930,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "lobby",
-                            "PlayerEntererLobby", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "lobby",
+                            "PlayerEntererLobby",
+                            e,
                         ),
                     );
                 }
@@ -1879,8 +1947,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player",
-                            "PlayerEntererLobby", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player",
+                            "PlayerEntererLobby",
+                            e,
                         ),
                     );
                 }
@@ -1911,8 +1981,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1926,8 +1998,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1944,8 +2018,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1962,8 +2038,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "board_size",
-                            "PlayersAssembled", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "board_size",
+                            "PlayersAssembled",
+                            e,
                         ),
                     );
                 }
@@ -1993,8 +2071,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -2008,8 +2088,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "attacker",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "attacker",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -2026,8 +2108,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "defender",
-                            "GameStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "defender",
+                            "GameStarted",
+                            e,
                         ),
                     );
                 }
@@ -2059,8 +2143,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "Attack", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -2074,8 +2160,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player",
-                            "Attack", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -2087,8 +2175,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "x", "Attack",
-                            e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "x",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -2099,8 +2189,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "y", "Attack",
-                            e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "y",
+                            "Attack",
+                            e,
                         ),
                     );
                 }
@@ -2130,8 +2222,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2145,8 +2239,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "attacker",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "attacker",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2163,8 +2259,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "defender",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "defender",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2178,8 +2276,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "x",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "x",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2190,8 +2290,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "y",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "y",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2202,8 +2304,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "hit",
-                            "AttackResult", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "hit",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2217,7 +2321,9 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "destroyed_ship_kind", "AttackResult", e
+                            "destroyed_ship_kind",
+                            "AttackResult",
+                            e,
                         ),
                     );
                 }
@@ -2253,8 +2359,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -2268,8 +2376,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -2286,8 +2396,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "GameRevealRequest", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "GameRevealRequest",
+                            e,
                         ),
                     );
                 }
@@ -2319,8 +2431,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -2334,8 +2448,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_a",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_a",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -2352,8 +2468,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "player_b",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "player_b",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -2367,8 +2485,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "outcome",
-                            "GameOver", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "outcome",
+                            "GameOver",
+                            e,
                         ),
                     );
                 }
@@ -2398,8 +2518,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "game_id",
-                            "Reset", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "game_id",
+                            "Reset",
+                            e,
                         ),
                     );
                 }
@@ -2410,8 +2532,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "timestamp",
-                            "Reset", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "timestamp",
+                            "Reset",
+                            e,
                         ),
                     );
                 }
@@ -2437,7 +2561,9 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferred", e
+                            "previous_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -2454,8 +2580,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferred", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -2491,7 +2619,9 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferStarted", e
+                            "previous_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -2508,8 +2638,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for Event {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -2899,7 +3031,9 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for OwnableComponentEven
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferred", e
+                            "previous_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -2916,8 +3050,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for OwnableComponentEven
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferred", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -2951,7 +3087,9 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for OwnableComponentEven
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferStarted", e
+                            "previous_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -2968,8 +3106,10 @@ impl TryFrom<&starknet_rust::core::types::EmittedEvent> for OwnableComponentEven
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -3013,7 +3153,9 @@ impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferred", e
+                            "previous_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -3030,8 +3172,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferred", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferred",
+                            e,
                         ),
                     );
                 }
@@ -3065,7 +3209,9 @@ impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
                     return Err(
                         format!(
                             "Could not deserialize field {} for {}: {:?}",
-                            "previous_owner", "OwnershipTransferStarted", e
+                            "previous_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
@@ -3082,8 +3228,10 @@ impl TryFrom<&starknet_rust::core::types::Event> for OwnableComponentEvent {
                 Err(e) => {
                     return Err(
                         format!(
-                            "Could not deserialize field {} for {}: {:?}", "new_owner",
-                            "OwnershipTransferStarted", e
+                            "Could not deserialize field {} for {}: {:?}",
+                            "new_owner",
+                            "OwnershipTransferStarted",
+                            e,
                         ),
                     );
                 }
